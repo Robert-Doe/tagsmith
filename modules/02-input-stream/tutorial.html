@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 2: Input Stream Preprocessing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #fbbf24; }
+  .strip { font-family: "JetBrains Mono", monospace; font-size: 0.95rem; display: flex; gap: 2px; flex-wrap: wrap; margin: 0.6rem 0; }
+  .cell { padding: 0.3rem 0.5rem; border-radius: 4px; background: var(--bg-raised); border: 1px solid var(--border); }
+  .cell.cr { color: #f87171; border-color: #f87171; }
+  .cell.lf { color: #4ade80; border-color: #4ade80; }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 1: Bare Metal Foundation · Module 2 of 16</span>Input Stream Preprocessing</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../../prerequisites/input-streams-iterators.html">Input Streams &amp; Iterators</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">Three keyboards, one typewriter</div>
+<p>Imagine three different old typewriters were used to type up the same
+manuscript: a Mac one that hits "new line" with a single character, a
+Windows one that hits it with two characters back-to-back, and an old
+classic Mac OS one that uses yet another single character. If you handed a
+proofreader all three pages and said "read for line breaks," they'd have to
+carry three different rulebooks in their head at once — misery.</p>
+<p>So before the proofreader (the tokenizer) ever starts reading, an editor
+retypes all three pages onto <em>identical</em> paper, using exactly one
+kind of line break throughout. Now the proofreader only ever needs to know
+one rule, forever, no matter which typewriter the original came from.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Raw input text arrives, possibly containing <code>CRLF</code> (Windows-style),
+  lone <code>CR</code> (old Mac-style), or already-correct lone <code>LF</code> (Unix-style) line endings — or any mixture of the three.</li>
+  <li>Every <code>CRLF</code> pair (a CR immediately followed by an LF) is
+  collapsed into a single LF.</li>
+  <li>Any <code>CR</code> character still remaining after step 2 (i.e., one
+  that was <em>not</em> part of a CRLF pair) is also converted to a single
+  LF.</li>
+  <li>The result — a string that provably contains zero <code>CR</code>
+  characters — becomes the actual input the <code>Tokenizer</code>'s
+  <code>pos</code>/<code>consume()</code>/<code>eof()</code> machinery
+  operates on.</li>
+  <li>Every state built from here on (Module 3 onward) is now free to never
+  special-case <code>CR</code> — it cannot occur.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Three real inputs, before and after preprocessing:</p>
+<p style="margin-bottom:0.2rem;">Windows-style — <code>"a\r\nb"</code></p>
+<div class="strip"><span class="cell">a</span><span class="cell cr">CR</span><span class="cell cr">LF</span><span class="cell">b</span></div>
+<div class="strip"><span class="cell">a</span><span class="cell lf">LF</span><span class="cell">b</span></div>
+<p style="margin-bottom:0.2rem;">Old Mac-style — <code>"a\rb"</code></p>
+<div class="strip"><span class="cell">a</span><span class="cell cr">CR</span><span class="cell">b</span></div>
+<div class="strip"><span class="cell">a</span><span class="cell lf">LF</span><span class="cell">b</span></div>
+<p style="margin-bottom:0.2rem;">Already Unix-style — <code>"a\nb"</code> (untouched)</p>
+<div class="strip"><span class="cell">a</span><span class="cell lf">LF</span><span class="cell">b</span></div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<p>See <code>js/CODE_WALKTHROUGH.md</code> / <code>java/CODE_WALKTHROUGH.md</code> for the real code.</p>
+<pre><code>function PREPROCESS(input):
+    // pass 1: collapse every CRLF pair to one LF
+    input = replace_all(input, "CR LF", "LF")
+    // pass 2: convert any CR that's left (it wasn't part of a pair)
+    input = replace_all(input, "CR", "LF")
+    return input
+
+function Tokenizer.new(rawInput):
+    this.input = PREPROCESS(rawInput)   // <- the one change from Module 1
+    this.pos = 0
+    this.state = DATA
+    ...</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize any real tag, attribute, or entity — still Module 1's limits</li>
+      <li>Handle NUL characters or other spec-defined parse-error code points (Module 3)</li>
+      <li>Iterate by true Unicode code point instead of UTF-16 code unit (deferred, documented risk)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Accept Windows, old-Mac, or Unix line endings and normalize all three identically</li>
+      <li>Guarantee, provably, that no state downstream will ever see a CR</li>
+      <li>Keep every one of Module 1's original guarantees intact (all 8/14 original checks still pass)</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/02-input-stream/js
+node --test</code></pre>
+<pre><code># tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/02-input-stream/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 2: Input Stream Preprocessing -- Java
+  PASS - CRLF pairs become a single LF
+  PASS - lone CR (no following LF) becomes LF
+  PASS - a run of CRLF, CRLF, CR, LF all normalize correctly
+  PASS - input with no CR is untouched
+  PASS - State enum has exactly 68 states
+  ... (14 more from Module 1, all still passing)
+18 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my '\r' literal isn't doing anything"</strong> — check your
+editor didn't silently convert your test file's own line endings; some
+editors auto-normalize on save, which can make a literal <code>"\r\n"</code>
+you typed in a test string quietly become something else if it's not
+inside a properly escaped string literal.<br>
+<strong>Fewer than 13 (JS) / 18 (Java) tests ran</strong> — you're probably
+running from the Module 1 folder by habit. Confirm you <code>cd</code>'d
+into <code>02-input-stream</code>, not <code>01-skeleton</code>.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the two normalization passes
+run in a specific order — CRLF pairs first, lone CRs second. Suppose you
+swapped that order. Exactly how many of this module's test assertions
+would you expect to fail, and why not more (or fewer)?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Two, in both languages — not one, and not four. Only tests whose input
+contains an actual <code>CRLF</code> pair break, because swapping the order
+means the lone-CR pass runs first and turns the CR half of every CRLF pair
+into its own LF <em>before</em> the CRLF-pair pass ever gets a chance to
+see a CRLF sequence — by the time that second pass runs, there simply
+isn't one left to match, so nothing happens, leaving behind two LFs where
+one was required. Tests built only from lone CRs (no adjacent LF) are
+completely unaffected, because the lone-CR pass handles them correctly
+regardless of which pass runs first. This was verified by actually
+swapping the code, not reasoned about in the abstract — see
+DECISIONS.md's "What We Proved" section for the exact before/after counts.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does this matter today? Don't all text editors just use LF now?</div>
+    <div class="a">A: Plenty of real-world HTML still arrives with CRLF — any file authored or edited on Windows, many HTTP responses, form submissions from browsers (which are required by other specs to send CRLF for line breaks in form data), and files round-tripped through certain version control configurations. A tokenizer that silently assumed LF-only would misbehave on a large fraction of real traffic.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Couldn't Module 3's Data state just special-case CR itself, instead of a separate preprocessing step?</div>
+    <div class="a">A: It could, mechanically — but then Module 3 wouldn't be the only place that needs to know about CR. Every future text-consuming state (RCDATA, RAWTEXT, script data, comments, attribute values, DOCTYPE identifiers — a dozen-plus states across a dozen-plus future modules) would each need the same special case, and each would be a chance to get it slightly wrong. Handling it exactly once, globally, before any state runs, is what lets every later module's DECISIONS.md correctly say "forced by spec, not re-derived."</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is this preprocessing step itself part of the 68-state machine?</div>
+    <div class="a">A: No — it's explicitly a separate step the spec describes before the state-machine section even begins. That's also why it isn't in the `State` enum and doesn't get a `NotImplementedError` module mapping; it's plumbing the state machine depends on, not one of its rooms.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: What about other whitespace or control characters — are those normalized too?</div>
+    <div class="a">A: No, and that's deliberate — only line-ending characters get rewritten here. Other control characters (like NUL) are left completely intact by preprocessing; the spec makes individual *states* responsible for deciding what a NUL, form feed, or other control character means in their specific context, starting with the Data state in Module 3. Preprocessing only ever touches CR/LF.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 3 returns to the Data state and finishes what Module 1 only
+started: the <code>&amp;</code> branch, the <code>&lt;</code> branch, and
+plain character emission — now guaranteed to run against input that's
+already been cleanly normalized by this module, so it never has to think
+about carriage returns at all.</p>
+
+<div class="module-nav">
+  <a href="../01-skeleton/tutorial.html">← Module 1: Token Types &amp; Machine Skeleton</a>
+  <a href="../03-data-state/tutorial.html">Module 3: Data State →</a>
+</div>
+
+</main>
+</body>
+</html>
