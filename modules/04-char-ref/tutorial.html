@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 4: Character Reference Consumption</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#22d3ee;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 2: Plain Text &amp; Character References · Module 4 of 16</span>Character Reference Consumption</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../../prerequisites/input-streams-iterators.html">Input Streams &amp; Iterators</a>
+  <a class="tag-link" href="../../prerequisites/lookahead-reconsume.html">Lookahead &amp; Reconsume</a>
+  <a class="tag-link" href="../../prerequisites/unicode-codepoints-vs-utf16.html">Code Points vs. UTF-16</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The universal translator with a phrasebook and a numbered code</div>
+<p>Imagine an interpreter who can decode a foreign message two ways. If it
+starts with a recognizable <em>word</em> ("amp", "copy", "hellip"), they
+flip through a phrasebook looking for the longest word they recognize — not
+just any match, the <em>longest</em> one, because a short word might
+accidentally be the start of a longer one. If instead the message starts
+with a <em>number</em> ("#65" or "#x41"), they skip the phrasebook entirely
+and just look the number up directly on a giant numbered chart of every
+symbol that exists — with one quirk: certain specific "damaged" numbers
+(zero, out-of-range, and a legacy block of typewriter codes) get mapped to
+a special "best guess" symbol instead of being read literally. And if the
+message doesn't start with either a recognizable word or a number, the
+interpreter shrugs and says "that's not a message at all" — leaving every
+character exactly where it was, untouched.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Data state already consumed the <code>&amp;</code> and switched here.
+  Nothing has been emitted yet.</li>
+  <li>If we're at EOF, or the next character is whitespace, <code>&lt;</code>,
+  or another <code>&amp;</code>: this was never a character reference.
+  Return "no match."</li>
+  <li>If the next character is <code>#</code>: this is a numeric reference.
+  Consume optional <code>x</code>/<code>X</code> (hex) or default to
+  decimal, consume digits, optionally consume a trailing <code>;</code>
+  (parse error if absent), then map the resulting number through the four
+  special cases (0, too-large, surrogate, Windows-1252 range) before
+  producing a final character.</li>
+  <li>If the next character is alphanumeric: this is a named reference.
+  Look ahead, try the longest prefix that matches a known name first,
+  shrinking one character at a time until something matches or nothing
+  does.</li>
+  <li>On success: emit the decoded character(s) as a token. On failure:
+  emit a literal <code>&amp;</code> token instead — nothing was consumed
+  beyond the original <code>&amp;</code>, so every subsequent character is
+  still there to be tokenized normally.</li>
+  <li>Either way, switch back to whichever state sent us here (Data or
+  RCDATA).</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Four inputs through the same algorithm:</p>
+<table>
+<tr><th>Input</th><th>Path taken</th><th>Result</th><th>Parse error?</th></tr>
+<tr><td><code>&amp;amp;</code></td><td>named, exact match</td><td><code>&amp;</code></td><td>no</td></tr>
+<tr><td><code>&amp;amp b</code></td><td>named, legacy no-semicolon match</td><td><code>&amp;</code> then literal space, <code>b</code></td><td>yes — missing-semicolon</td></tr>
+<tr><td><code>&amp;#65;</code></td><td>numeric, decimal</td><td><code>A</code></td><td>no</td></tr>
+<tr><td><code>&amp;#0;</code></td><td>numeric, special-cased</td><td>U+FFFD</td><td>yes — null-character-reference</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function CONSUME_CHARACTER_REFERENCE(tokenizer):
+    start = tokenizer.pos
+    if tokenizer.atEOF(): return NO_MATCH
+    c = tokenizer.peek()
+    if c in {TAB, LF, FF, SPACE, '&lt;', '&amp;'}: return NO_MATCH
+
+    if c == '#':
+        tokenizer.consume()                       // the '#'
+        isHex = tryConsume(tokenizer, 'x' or 'X')
+        digits = consumeWhile(tokenizer, isHex ? HEX_DIGIT : DIGIT)
+        if digits is empty:
+            tokenizer.pos = start
+            reportParseError("absence-of-digits...")
+            return NO_MATCH
+        if tokenizer.peek() == ';': tokenizer.consume()
+        else: reportParseError("missing-semicolon...")
+        n = parseNumber(digits, isHex ? 16 : 10)
+        return mapNumericCodePoint(n)              // handles 0 / too-large / surrogate / windows-1252
+
+    if isAlphanumeric(c):
+        for len from MAX_NAME_LENGTH down to 1:
+            candidate = tokenizer.peekString(len)
+            if candidate in NAMED_REFERENCES:
+                tokenizer.pos += len
+                if not candidate.endsWith(';'): reportParseError("missing-semicolon...")
+                return NAMED_REFERENCES[candidate]
+        tokenizer.pos = start
+        return NO_MATCH
+
+    return NO_MATCH</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Decode any named reference outside this course's ~25-entry subset (documented scope cut)</li>
+      <li>Handle the attribute-value "ambiguous ampersand" exception (Module 11)</li>
+      <li>Tokenize inside a real <code>&lt;textarea&gt;</code> (Module 5 — RCDATA state itself doesn't exist yet)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly decode named, decimal, and hex character references</li>
+      <li>Correctly apply all four numeric special cases with real evidence, not guesses</li>
+      <li>Correctly fall back to literal text on any non-match, with zero characters lost</li>
+      <li>Correctly represent an astral code point as one token spanning a real surrogate pair</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/04-char-ref/js
+node --test</code></pre>
+<pre><code># tests 19
+# pass 19
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/04-char-ref/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 4: Character Reference Consumption -- Java
+  PASS - a named reference with a semicolon decodes correctly
+  PASS - a legacy named reference without a semicolon still decodes, with a parse error
+  PASS - &#0; is a parse error and becomes U+FFFD, not a literal NUL
+  PASS - an astral numeric reference produces one CharacterToken holding a surrogate pair
+  ... (15 more)
+19 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my astral emoji test shows length 1, not 2"</strong> — you're
+probably counting with something codepoint-aware (like spreading a JS
+string into an array, or Java's <code>codePointCount</code>) instead of
+raw length. <code>.length</code> (JS) / <code>.length()</code> (Java) count
+UTF-16 code units, which is exactly what this test wants to see as 2 — see
+the Unicode prerequisite page if this is surprising.<br>
+<strong>"my named-reference table lookup never matches anything"</strong> —
+double check you're computing <code>LONGEST_NAME_LENGTH</code> from the
+table's actual keys, not a hardcoded number that's since drifted out of
+sync after you added an entry.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> <code>&amp;#0;</code> becomes
+U+FFFD, but a literal NUL byte typed directly into the Data state (Module
+3) is emitted as-is. Both are "a NUL, sort of." Why does the spec treat
+them so differently?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because they come from different real-world failure modes, and the spec
+is optimizing for what each one most likely <em>means</em>. A literal NUL
+byte in a document is almost always a genuine encoding/transmission
+accident — corrupted bytes, a truncated read, a binary file mistakenly
+served as text — and preserving it as-is keeps the tokenizer's behavior
+maximally predictable and debuggable for that accident. <code>&amp;#0;</code>,
+by contrast, can only appear because someone (or some generator) explicitly
+typed the six characters <code>&amp;</code><code>#</code><code>0</code><code>;</code>
+— it's not a transmission accident, it's deliberate text that is, in a
+Unicode-aware document, requesting a character that fundamentally cannot
+be validly represented (NUL is disallowed as real character data in this
+context). U+FFFD is the standard "you asked for something that cannot be
+here" signal across all of Unicode-aware software, not just HTML — using it
+here keeps this spec consistent with that much broader convention.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does matching need to be "longest match wins" instead of just checking the full real spec table for an exact match with a trailing semicolon?</div>
+    <div class="a">A: Because the spec explicitly supports legacy references with NO trailing semicolon for a specific subset of names — so <code>&amp;amp</code> (no semicolon) must still resolve, and the algorithm can't know in advance whether more characters after it were meant to extend the name or not. Longest-match resolves this deterministically: try the biggest plausible name first, and only fall back to something shorter if the bigger one isn't real.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: If my named-reference table only has ~25 entries, doesn't that mean this tokenizer gives wrong answers on most real-world HTML?</div>
+    <div class="a">A: It gives *incomplete* answers on real-world HTML using entities outside the subset (they'll fall back to literal text, same as any genuinely unrecognized name) — but never *wrong* ones for the entities it does know, and the fallback behavior itself is spec-correct. This is exactly the kind of honestly-scoped gap this course's DECISIONS.md exists to make undeniable rather than something you'd have to discover by accident.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does a failed named-reference match have to fully backtrack instead of just consuming what it read and moving on?</div>
+    <div class="a">A: Because those characters weren't actually part of a reference — they're ordinary text that happens to start with a letter, like the "x" in "&amp;xyz;" is just the literal letter x, not evidence of a reference attempt gone wrong. Backtracking to the start is what lets Data state's normal character-by-character loop pick every one of them up correctly afterward.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: This module tests CHARACTER_REFERENCE_IN_RCDATA directly, by force-setting state — isn't that cheating, since RCDATA state itself doesn't exist yet?</div>
+    <div class="a">A: It's the same technique Module 1 used to test COMMENT_START before Module 13 existed — deliberately testing one seam of the machine in isolation, without needing every upstream state built first. It's not cheating; it's exactly what lets this course verify each state independently instead of only being able to test anything once all 68 states are finished.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 5 finally builds real behavior for RCDATA, RAWTEXT, and
+PLAINTEXT — the states that let <code>&lt;textarea&gt;</code>,
+<code>&lt;title&gt;</code>, and <code>&lt;style&gt;</code> content stay
+un-parsed as markup, using the "appropriate end tag token" concept: only a
+closing tag that matches the name of the tag that opened the section is
+allowed to close it.</p>
+
+<div class="module-nav">
+  <a href="../03-data-state/tutorial.html">← Module 3: Data State</a>
+  <a href="../05-rcdata-rawtext/tutorial.html">Module 5: RCDATA/RAWTEXT/PLAINTEXT Families →</a>
+</div>
+
+</main>
+</body>
+</html>
