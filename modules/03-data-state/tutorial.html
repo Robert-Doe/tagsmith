@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 3: Data State</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 2: Plain Text &amp; Character References · Module 3 of 16</span>Data State</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../../prerequisites/finite-state-machines.html">Finite State Machines</a>
+  <a class="tag-link" href="../../prerequisites/input-streams-iterators.html">Input Streams &amp; Iterators</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The airport customs officer</div>
+<p>Picture a customs officer standing at one checkpoint, watching a line of
+travelers pass through one at a time. For almost every traveler, the
+officer just waves them straight through into the country — that's a plain
+character becoming a `CharacterToken`. But two specific travelers get
+special treatment: anyone carrying a package marked "&amp;" gets redirected
+to a separate inspection room (the character-reference room), and anyone
+carrying a package marked "&lt;" gets redirected to a different inspection
+room (the tag room). The officer doesn't inspect the package themselves —
+that's not their job. They just point, say "go there," and immediately
+turn to face the next traveler in line.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Is there a next character at all? If not, emit an EOF token and stop
+  — unchanged from Module 1.</li>
+  <li>Consume the next character.</li>
+  <li>Is it <code>&amp;</code>? Switch to the character-reference-in-data
+  state. Emit nothing. Stop processing this character — the next
+  <code>step()</code> call picks up in the new state.</li>
+  <li>Is it <code>&lt;</code>? Switch to the tag-open state. Same as
+  above: emit nothing, hand off entirely.</li>
+  <li>Is it NUL (U+0000)? Record a parse error, but still emit it as a
+  <code>CharacterToken</code> — tokenizing does not stop for a parse
+  error.</li>
+  <li>Anything else: emit it as a <code>CharacterToken</code>, verbatim.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Tracing <code>"ab&amp;c"</code> through the tokenizer, character by character:</p>
+<table>
+<tr><th>Step</th><th>Consumes</th><th>Action</th><th>Tokens emitted so far</th><th>New state</th></tr>
+<tr><td>1</td><td><code>a</code></td><td>emit CharacterToken('a')</td><td>[a]</td><td>DATA</td></tr>
+<tr><td>2</td><td><code>b</code></td><td>emit CharacterToken('b')</td><td>[a, b]</td><td>DATA</td></tr>
+<tr><td>3</td><td><code>&amp;</code></td><td>switch state only, emit nothing</td><td>[a, b]</td><td>CHARACTER_REFERENCE_IN_DATA</td></tr>
+<tr><td>4</td><td>(none — new state has no handler yet)</td><td><code>NotImplementedError</code>, pointing at Module 4</td><td>[a, b] (final)</td><td>—</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function DATA_STATE(tokenizer):
+    if tokenizer.atEOF():
+        emit EOFToken
+        tokenizer.halted = true
+        return
+
+    c = tokenizer.consume()
+
+    if c == '&':
+        tokenizer.state = CHARACTER_REFERENCE_IN_DATA
+        return                      // emits nothing
+
+    if c == '<':
+        tokenizer.state = TAG_OPEN
+        return                      // emits nothing
+
+    if c == NUL:
+        reportParseError("unexpected-null-character")
+        emit CharacterToken(c)      // still emitted, per THIS spec snapshot
+        return
+
+    emit CharacterToken(c)          // the common case</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Decode <code>&amp;amp;</code> or any character reference (Module 4)</li>
+      <li>Recognize a single tag (Module 9)</li>
+      <li>Tokenize <code>&lt;textarea&gt;</code>/<code>&lt;script&gt;</code> content correctly (Modules 5–8)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize any plain-text HTML document with no tags or entities</li>
+      <li>Correctly hand off to the two states that follow &amp; and &lt;</li>
+      <li>Record parse errors (starting with NUL) without halting</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/03-data-state/js
+node --test</code></pre>
+<pre><code># tests 11
+# pass 11
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/03-data-state/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 3: Data State (full) -- Java
+  PASS - plain text becomes one CharacterToken per character, then EOF
+  PASS - an ampersand switches state, then the next step throws Module 4
+  PASS - '&' itself emits nothing -- it only switches state
+  PASS - a less-than sign switches state, then the next step throws Module 9
+  PASS - '<' itself emits nothing -- it only switches state
+  PASS - characters before an ampersand are still emitted before the throw
+  PASS - a NULL character is a parse error but is still emitted as a character token
+  PASS - a NULL character does not stop tokenizing
+  ... (7 more carried forward from Modules 1-2)
+15 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my NUL-character test doesn't fail the way I expect"</strong> —
+NUL is invisible in most editors and terminals. If you typed a literal
+space instead of a real NUL character in a test string, your test is
+silently checking the wrong thing. Verify with
+<code>str.charCodeAt(i)</code> (JS) or <code>(int) str.charAt(i)</code>
+(Java) — it should print <code>0</code>, not <code>32</code>.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> Module 1 threw a
+<code>NotImplementedError</code> naming Module 4 directly from inside
+<code>dataState()</code> when it saw <code>&amp;</code>. Module 3 no longer
+does that — it just switches state and returns, letting the <em>generic</em>
+fallback in <code>step()</code> throw instead. Both approaches produce the
+exact same observable error. So why does the change matter?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because Module 1's version was a lie that happened to look correct: it
+hardcoded knowledge of what error message a &amp; "should" produce, rather
+than actually implementing the spec's real behavior (switch state) and
+letting the truth fall out naturally. The tell is what happens when Module
+4 actually gets built: with Module 1's approach, you'd have to remember to
+go delete that hardcoded throw. With Module 3's approach, Module 4 just
+needs to add a real handler for <code>CHARACTER_REFERENCE_IN_DATA</code> to
+the dispatch table, and the generic fallback simply stops firing for that
+state — zero code in <code>dataState()</code> needs to change ever again.
+That's the difference between code that looks right today and code that's
+*structured* to become more right tomorrow without rework.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does emitting a literal NUL character token matter — how often does real HTML actually contain a NUL byte?</div>
+    <div class="a">A: Rarely by accident, but not never — and it's a classic security-relevant edge case: NUL-byte injection has historically been used to try to confuse parsers or filters that treat NUL as a string terminator (common in C-derived string handling) differently than a spec-compliant tokenizer does. Getting this exact, spec-mandated behavior right is directly relevant to Track 2's security modules later in this course.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Since '&' and '<' don't emit anything, how does a real page's text ever actually get split into the right CharacterTokens around a tag?</div>
+    <div class="a">A: The split happens implicitly, for free, as a side effect of state switching — every character consumed *before* the '<' already got its own CharacterToken emitted in previous loop iterations; the '<' just marks the boundary where Data state stops being in charge. Nothing needs to "look back" or buffer text waiting to see if a tag is coming.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is "parse error" the same thing as "this is invalid HTML, reject it"?</div>
+    <div class="a">A: No — this is one of the most-misunderstood parts of the HTML5 parsing model for newcomers. A parse error is a signal ("something unusual happened here"), not a stop condition. HTML tokenizers and parsers are specifically designed to always produce *some* well-defined output for *any* input, valid or not — that's precisely why browsers can render malformed HTML instead of showing a blank error page.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: You mentioned the modern spec replaces NUL with U+FFFD instead of emitting it literally — which one should I actually cite in my comprehensive exam?</div>
+    <div class="a">A: Know both, and know which document you're citing. This course intentionally implements the exact W3C Last Call snapshot linked in ROADMAP.md, because that's the artifact you're building against — but a defense committee could reasonably ask about the current WHATWG Living Standard's behavior too, since that's what real shipping browsers implement today. Being able to name the difference and explain why specs evolved (implementer/security feedback after the fact) is stronger than only knowing one version by rote.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 4 finally builds a real handler for
+<code>CHARACTER_REFERENCE_IN_DATA</code> — the "inspection room" this
+module has been correctly routing travelers to, but leaving empty. It
+implements the spec's general "consume a character reference" algorithm:
+named references like <code>&amp;amp;</code>, decimal references like
+<code>&amp;#38;</code>, and hex references like <code>&amp;#x26;</code>,
+all decoding to the same character.</p>
+
+<div class="module-nav">
+  <a href="../02-input-stream/tutorial.html">← Module 2: Input Stream Preprocessing</a>
+  <a href="../04-char-ref/tutorial.html">Module 4: Character Reference Consumption →</a>
+</div>
+
+</main>
+</body>
+</html>
