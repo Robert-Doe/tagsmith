@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 5: RCDATA / RAWTEXT / PLAINTEXT Families</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #0ea5e9; }
+  .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-family: "JetBrains Mono", monospace; font-size: 0.85rem; }
+  .chain .box { border: 1px solid var(--border); background: var(--bg-raised); border-radius: 6px; padding: 0.5rem 0.8rem; }
+  .chain .arrow { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 2: Plain Text &amp; Character References · Module 5 of 16</span>RCDATA / RAWTEXT / PLAINTEXT Families</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../../prerequisites/finite-state-machines.html">Finite State Machines</a>
+  <a class="tag-link" href="../../prerequisites/lookahead-reconsume.html">Lookahead &amp; Reconsume</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The security guard who only recognizes ONE badge</div>
+<p>Imagine a room ("RCDATA," standing in for the inside of a
+<code>&lt;textarea&gt;</code>) with a security guard at the door. Once
+you're inside, the guard treats absolutely everything you say as ordinary
+conversation — including if you shout "there's a fire, everyone leave
+through the tag door!" That phrase alone doesn't open the door. The
+<em>only</em> thing that opens the door is showing the exact badge that
+matches the name written on the room's entrance sign — say the room is
+labeled "textarea," then only a badge that spells out exactly
+"</textarea>" works. A badge that starts right (<code>&lt;/text</code>)
+but trails off wrong, or matches a completely different room's name
+(<code>&lt;/title&gt;</code>), gets rejected — and everything you already
+said while showing that failed badge gets treated as if you'd just been
+talking the whole time, badge included.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Inside RCDATA or RAWTEXT, ordinary characters become
+  <code>CharacterToken</code>s exactly like Data state — with one
+  difference: RAWTEXT never treats <code>&amp;</code> as special.</li>
+  <li>Seeing <code>&lt;</code> doesn't commit to anything yet — it only
+  switches to a "less-than-sign" state that peeks at the very next
+  character.</li>
+  <li>If that next character isn't <code>/</code>, the attempt is
+  abandoned instantly: emit a literal <code>&lt;</code>, go right back to
+  RCDATA/RAWTEXT, and re-examine that same character fresh.</li>
+  <li>If it is <code>/</code>, commit further: start building a candidate
+  end tag name, one letter at a time, into both a real (possible)
+  <code>EndTagToken</code> and a plain text buffer.</li>
+  <li>The moment a terminator character (whitespace, <code>/</code>,
+  <code>&gt;</code>) is seen, check: does the name built so far exactly
+  match the name of whatever tag opened this section?</li>
+  <li>If yes: this really is the closing tag. Emit it, and switch all the
+  way back to Data state (leaving RCDATA/RAWTEXT entirely). If no: none of
+  this was real markup after all — dump everything gathered as literal
+  text, and go back to RCDATA/RAWTEXT to reprocess the terminator
+  character normally.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">The four-state chain shared by both families:</p>
+<div class="chain">
+  <div class="box">RCDATA / RAWTEXT</div>
+  <span class="arrow">--'&lt;'--&gt;</span>
+  <div class="box">less-than-sign</div>
+  <span class="arrow">--'/'--&gt;</span>
+  <div class="box">end-tag-open</div>
+  <span class="arrow">--letter--&gt;</span>
+  <div class="box">end-tag-name</div>
+</div>
+<p style="font-size:0.85rem;color:var(--text-dim);">Any step that doesn't match its arrow's condition immediately abandons the attempt and returns to RCDATA/RAWTEXT, dumping whatever was tentatively gathered as literal text.</p>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function END_TAG_NAME_STATE(tokenizer, returnState):
+    c = tokenizer.consume()             // may be EOF
+    isAppropriate = tokenizer.currentToken.tagName == tokenizer.lastStartTagName
+
+    if isAppropriate and c in {TAB, LF, FF, SPACE}:
+        tokenizer.state = BEFORE_ATTRIBUTE_NAME
+        return
+    if isAppropriate and c == '/':
+        tokenizer.state = SELF_CLOSING_START_TAG
+        return
+    if isAppropriate and c == '&gt;':
+        emit tokenizer.currentToken
+        tokenizer.state = DATA
+        return
+
+    if c is an ASCII letter:
+        tokenizer.currentToken.tagName += lowercase(c)
+        tokenizer.tempBuffer += c
+        return                            // stay in this state, keep building
+
+    // bail out: not actually a closing tag
+    emit CharacterToken('&lt;')
+    emit CharacterToken('/')
+    for bufChar in tokenizer.tempBuffer: emit CharacterToken(bufChar)
+    tokenizer.state = returnState
+    reconsume c in returnState            // no-op if c was EOF</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Actually enter RCDATA/RAWTEXT from real markup — <code>&lt;textarea&gt;</code> itself isn't tokenized until Module 9</li>
+      <li>Parse attributes on the closing tag if one somehow had them (Module 10)</li>
+      <li><code>&lt;script&gt;</code> content — it has its own, much stranger family (Modules 6–8)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize the full contents of any RCDATA or RAWTEXT section, given where it starts</li>
+      <li>Correctly distinguish an appropriate closing tag from an unrelated one</li>
+      <li>Correctly handle PLAINTEXT's one-way-door behavior</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/05-rcdata-rawtext/js
+node --test</code></pre>
+<pre><code># tests 14
+# pass 14
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/05-rcdata-rawtext/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 5: RCDATA/RAWTEXT/PLAINTEXT Families -- Java
+  PASS - a matching end tag name closes RCDATA and emits a real EndTagToken
+  PASS - a NON-matching end tag name does NOT close RCDATA -- dumps as literal text instead
+  PASS - RAWTEXT does not decode character references -- & is just literal
+  PASS - PLAINTEXT never parses tags or entities -- everything is literal, forever
+  ... (9 more)
+13 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my end tag never matches, even with the right name"</strong> —
+check you set <code>lastStartTagName</code> (or called
+<code>setLastStartTagName</code> in Java) <em>before</em> calling
+<code>run()</code>, and that it's lowercase — the algorithm lowercases the
+tag name as it builds it, so an uppercase expectation will never match.<br>
+<strong>"characters are missing after a failed match"</strong> — check the
+reconsume step actually decrements <code>pos</code> by exactly one, and
+only when the failing character wasn't EOF.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the "appropriate end tag
+token" check compares against <code>lastStartTagName</code>, a single
+value tracked globally on the tokenizer — not, say, a stack of open tag
+names. Given that HTML allows nesting, why is a single value enough here,
+when it clearly wouldn't be enough for matching arbitrary nested tags in
+general?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because RCDATA and RAWTEXT sections can never nest, by construction —
+once you're inside a <code>&lt;textarea&gt;</code>, there is no such thing
+as a second, inner <code>&lt;textarea&gt;</code> "opening" (a literal
+<code>&lt;textarea&gt;</code> typed inside a textarea is just text, not a
+new tag, precisely because RCDATA doesn't parse tags at all until it sees
+a matching close). Since only one of these sections can ever be "open" at
+a time, there's only ever one name that could possibly be relevant — the
+name of whichever single tag most recently caused the tokenizer to enter
+this mode. A stack would be solving a problem that structurally cannot
+occur here. (Contrast this with the tree-construction stage, one layer up,
+which very much does need a stack — for regular nested elements. That's
+Track 2's Module A1.)</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: If <code>&lt;/title&gt;</code> doesn't close a <code>&lt;textarea&gt;</code>, what DOES eventually close it, if the author forgets the closing tag entirely?</div>
+    <div class="a">A: Nothing, within the tokenizer's rules — the section runs to the actual end of the document, and the whole rest of the file becomes RCDATA text. This is a real, well-known real-world footprint: a forgotten <code>&lt;/textarea&gt;</code> can swallow the rest of a page. It's one of the clearest illustrations of why the tokenizer can't "look ahead" to fix author mistakes; it only ever reacts to what it has actually seen so far.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does a failed match need to replay the buffered characters as INDIVIDUAL CharacterTokens instead of one bigger token?</div>
+    <div class="a">A: Because Module 1 already decided a Character token holds exactly one character — this module didn't get to make a new decision here, it just had to stay consistent with that constraint while implementing a state that happens to accumulate multiple characters before deciding whether to keep them.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is PLAINTEXT actually used in real websites today?</div>
+    <div class="a">A: Extremely rarely as deliberate authoring — but browsers still implement it, because HTML parsing rules are effectively permanent once the web depends on them; removing "quirky" legacy behavior risks breaking some genuinely ancient page somewhere. It's a good concrete example of why HTML's parsing spec is as long and detailed as it is: not because anyone wants this complexity, but because compatibility demands it.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: This module builds real logic that depends on lastStartTagName, which nothing sets yet. Isn't that backwards?</div>
+    <div class="a">A: It's the same "prove the consumer before the producer exists" pattern this course has used since Module 1 (testing COMMENT_START before Module 13, testing CHARACTER_REFERENCE_IN_RCDATA before RCDATA existed in Module 4). Building consumers first and verifying them against manually-set test fixtures is what lets each module be independently, provably correct — rather than only testable once all 68 states are finished.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 6 tackles <code>&lt;script&gt;</code> content — which looks like
+it should be a third member of this same family, but isn't: script data
+has its own escape mechanism (triggered by an embedded
+<code>&lt;!--</code>) that exists purely for compatibility with how
+<code>&lt;script&gt;</code> tags were written before browsers understood
+<code>&lt;script&gt;</code> at all. Modules 6–8 build it in three stages,
+from simplest to strangest.</p>
+
+<div class="module-nav">
+  <a href="../04-char-ref/tutorial.html">← Module 4: Character Reference Consumption</a>
+  <a href="../06-script-base/tutorial.html">Module 6: Script Data Base States →</a>
+</div>
+
+</main>
+</body>
+</html>
