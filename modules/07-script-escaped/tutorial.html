@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 7: Script Data Escaped States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #c084fc; }
+  .counter { display: flex; gap: 0.5rem; align-items: center; font-family: "JetBrains Mono", monospace; font-size: 0.85rem; flex-wrap: wrap; }
+  .counter .box { border: 1px solid var(--border); background: var(--bg-raised); border-radius: 6px; padding: 0.5rem 0.9rem; text-align: center; }
+  .counter .arrow { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 3: The Script Data Minefield · Module 7 of 16</span>Script Data Escaped States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../06-script-base/tutorial.html">Module 6: Script Data Base States</a>
+  <a class="tag-link" href="../../prerequisites/finite-state-machines.html">Finite State Machines</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A doorman counting knocks</div>
+<p>Once you're inside the hidden comment, a doorman starts listening for a
+very specific knock pattern to know when to let you back out: two knocks
+in a row, followed by the doorbell. He keeps a mental tally: "zero knocks
+so far... one knock... two knocks, I'm watching the bell now." But if
+<em>anything else</em> happens in between — someone coughs, talks, does
+literally anything that isn't another knock — he resets his tally back to
+zero and starts listening from scratch. Ring the bell without two fresh
+knocks first, and he doesn't even look up; the bell only means "open the
+door" if it's the very next sound after two consecutive knocks.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 6 already emitted <code>&lt;</code> and <code>!</code>. Seeing
+  a <code>-</code> next commits toward the comment opener; anything else
+  abandons it and rejoins plain script data.</li>
+  <li>A second consecutive <code>-</code> completes <code>&lt;!--</code>
+  and enters escaped mode already primed at "dash count: two."</li>
+  <li>While escaped, ordinary text is literal (no character references,
+  same as RAWTEXT/script data). Each <code>-</code> advances the dash
+  count; anything else resets it to zero.</li>
+  <li><code>&gt;</code> only means "close the comment" when the dash count
+  is already two-or-more. Everywhere else, it's just a character.</li>
+  <li><code>&lt;</code> while escaped might start a real
+  <code>&lt;/script&gt;</code> (checked via the same "appropriate end tag"
+  mechanism as Modules 5–6) or might start a nested, literal
+  <code>&lt;script</code> — which hands off entirely to a different
+  mechanism (Module 8), not a repeat of this one.</li>
+  <li>EOF while still escaped is its own specific parse error — a
+  never-closed hidden comment.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">The dash-counting sub-machine:</p>
+<div class="counter">
+  <div class="box">ESCAPED<br>(count: 0)</div>
+  <span class="arrow">--'-'--&gt;</span>
+  <div class="box">ESCAPED_DASH<br>(count: 1)</div>
+  <span class="arrow">--'-'--&gt;</span>
+  <div class="box">ESCAPED_DASH_DASH<br>(count: 2+)</div>
+</div>
+<p style="font-size:0.85rem;color:var(--text-dim);margin-top:0.8rem;">Any character that isn't <code>-</code>, <code>&lt;</code>, or NUL sends you straight back to "count: 0," from <em>any</em> of the three boxes. Only from the rightmost box does <code>&gt;</code> mean anything special.</p>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function SCRIPT_DATA_ESCAPED_DASH_DASH_STATE(tokenizer):
+    c = tokenizer.consume()      // EOF here -> parse error, emit EOF, halt
+    if c == '-':
+        emit CharacterToken('-')
+        return                              // stay -- count remains "2+"
+    if c == '&lt;':
+        tokenizer.state = SCRIPT_DATA_ESCAPED_LESS_THAN_SIGN
+        return
+    if c == '&gt;':
+        emit CharacterToken('&gt;')
+        tokenizer.state = SCRIPT_DATA        // the ONLY real exit
+        return
+    // anything else, including NUL: count resets to zero
+    if c is NUL: reportParseError("unexpected-null-character")
+    emit CharacterToken(c)
+    tokenizer.state = SCRIPT_DATA_ESCAPED    // back to count: 0</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Handle a nested, literal <code>&lt;script&gt;...&lt;/script&gt;</code> inside the hidden comment (Module 8)</li>
+      <li>Enter this whole mechanism from real markup — needs Module 9's <code>&lt;script&gt;</code> opening tag</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize a complete, real hidden-comment-wrapped script body</li>
+      <li>Correctly distinguish "close the comment" from "just a character that happens to be &gt;"</li>
+      <li>Correctly close the whole script element via a matching end tag, even mid-comment</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/07-script-escaped/js
+node --test</code></pre>
+<pre><code># tests 12
+# pass 12
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/07-script-escaped/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 7: Script Data Escaped States -- Java
+  PASS - a full "--comment-->" round trip emits every character and exits to SCRIPT_DATA
+  PASS - a non-matching end tag falls back to SCRIPT_DATA_ESCAPED, not plain SCRIPT_DATA
+  PASS - a nested "<script" inside escaped mode hands off to SCRIPT_DATA_DOUBLE_ESCAPE_START
+  ... (8 more)
+11 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"--&gt; doesn't close the comment"</strong> — check the dash
+count is actually reaching two before the &gt; arrives; a single stray
+non-dash character anywhere in the run resets it, by design.<br>
+<strong>"my tests all pass but I suspect a bug"</strong> — see this
+module's own DECISIONS.md "What We Proved" section: a real bug was
+deliberately introduced during this module's own construction and slipped
+past the full test suite undetected. Green tests are not a correctness
+guarantee, only a coverage record.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the spec could have defined
+"exit the hidden comment" as reacting to the exact three-character sequence
+<code>-->` </code>as a single unit, checked all at once. Instead, it's
+built as three separate states each reacting to one character at a time.
+What does the three-state version buy that a single "look for the whole
+sequence" check wouldn't?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Correct handling of a dash count <em>greater</em> than two, and correct
+behavior for a dash-run that's interrupted partway through — both of which
+are exactly the kind of case a naive "does the next three characters spell
+close it out?" check would get wrong or would need extra special-casing to
+handle. Input like <code>----&gt;</code> (four dashes) needs to still
+close correctly, and input like <code>--x--&gt;</code> needs the count to
+correctly restart after the interrupting <code>x</code>. A three-state
+counter handles both automatically as a natural consequence of its
+structure, without needing to special-case either one — which is really
+the whole reason a state machine is the right tool for this problem in the
+first place, going all the way back to the Prerequisites page on finite
+state machines.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: This seems like a lot of machinery for something that barely matters in modern web development. Is it worth knowing this deeply?</div>
+    <div class="a">A: For day-to-day web development, no. For a comprehensive exam on browser tokenization specifically, this module is prime territory — it's the single clearest example in the entire spec of legacy compatibility requirements directly shaping present-day parsing rules, and it's exactly the kind of "why does the spec do THIS" question an examiner can ask that a surface-level reading wouldn't prepare you for.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does a nested "&lt;script" inside the hidden comment need a totally separate mechanism (Module 8) instead of just recursing into this same one?</div>
+    <div class="a">A: Because the two situations aren't actually symmetric. This module's job is "recognize when the OUTER hidden comment closes." A nested &lt;script&gt;...&lt;/script&gt; inside that comment needs its OWN closing recognized first, without prematurely triggering the outer comment's close — and critically, the outer close condition itself changes once you're inside a nested script (the spec requires seeing the nested &lt;/script&gt; before "-->" is allowed to mean anything again). That's a genuinely different rule, not the same rule applied twice.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is "eof-in-script-html-comment-like-text" a real name from the spec, or did this course make it up?</div>
+    <div class="a">A: It matches the real parse-error naming convention used in the modern WHATWG Living Standard for this exact situation. Naming it consistently with real spec terminology (rather than an invented description) is deliberate — it's meant to be a name you could search for in the actual spec and land on the relevant section.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 8 finishes the script-data family: the double-escape mechanism
+for a nested, literal <code>&lt;script&gt;...&lt;/script&gt;</code>
+appearing inside an already-hidden comment. It reuses this module's
+dash-counting pattern a second time, at one more level of nesting.</p>
+
+<div class="module-nav">
+  <a href="../06-script-base/tutorial.html">← Module 6: Script Data Base States</a>
+  <a href="../08-script-double-escaped/tutorial.html">Module 8: Script Data Double Escaped States →</a>
+</div>
+
+</main>
+</body>
+</html>
