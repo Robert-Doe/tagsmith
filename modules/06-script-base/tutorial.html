@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 6: Script Data Base States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#a78bfa;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 3: The Script Data Minefield · Module 6 of 16</span>Script Data Base States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../05-rcdata-rawtext/tutorial.html">Module 5: RCDATA/RAWTEXT/PLAINTEXT Families</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">This module leans directly on Module 5's shared machinery rather than a Prerequisites-layer concept — read that module first if you haven't.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The same security guard, one extra badge type</div>
+<p>Module 5's guard is back, still only opening the door for one exact
+badge. But this room ("script data," standing in for
+<code>&lt;script&gt;</code> content) has one more rule taped to the wall:
+if you show up holding a badge that starts with an exclamation mark, the
+guard doesn't evaluate it at all — they immediately radio a *different,
+stricter* guard station down the hall and hand you off, no questions asked.
+That stricter station is Module 7's entire job. This module only builds
+the radio call.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Script data behaves exactly like RAWTEXT for ordinary text: no
+  character references, NUL is a parse error but still literal, EOF ends
+  it.</li>
+  <li>Seeing <code>&lt;</code> switches to a less-than-sign state that now
+  checks for <em>three</em> possibilities instead of Module 5's two.</li>
+  <li><code>/</code>: same as before — try to match a closing
+  <code>&lt;/script&gt;</code>.</li>
+  <li><code>!</code>: immediately emit both the <code>&lt;</code> and
+  <code>!</code> as real tokens (not deferred!), then hand off entirely to
+  the script-data-escape-start state.</li>
+  <li>Anything else: literal <code>&lt;</code>, reconsume, back to script
+  data — unchanged from Module 5.</li>
+  <li>The end-tag matching chain (open → name → appropriate-check) is
+  <em>exactly</em> Module 5's mechanism, reused without modification.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input (forced into SCRIPT_DATA)</th><th>Result</th></tr>
+<tr><td><code>var x=1&amp;2;</code></td><td>literal characters, including the bare <code>&amp;</code> — no decoding</td></tr>
+<tr><td><code>a&lt;b</code></td><td><code>a</code>, <code>&lt;</code>, <code>b</code> — <code>&lt;</code> not followed by <code>/</code> or <code>!</code> is just text</td></tr>
+<tr><td><code>a&lt;!--b</code></td><td><code>CharacterToken('a')</code>, <code>CharacterToken('&lt;')</code>, <code>CharacterToken('!')</code>, then <strong>throws</strong>, naming Module 7</td></tr>
+<tr><td><code>code&lt;/script&gt;after</code> (with lastStartTagName="script")</td><td><code>code</code>, real <code>EndTagToken(script)</code>, <code>after</code></td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function SCRIPT_DATA_LESS_THAN_SIGN_STATE(tokenizer):
+    next = tokenizer.peek()
+    if next == '/':
+        tokenizer.tempBuffer = ''
+        tokenizer.consume()
+        tokenizer.state = SCRIPT_DATA_END_TAG_OPEN
+        return
+    if next == '!':                          // NEW this module
+        tokenizer.consume()
+        emit CharacterToken('&lt;')
+        emit CharacterToken('!')
+        tokenizer.state = SCRIPT_DATA_ESCAPE_START   // Module 7's room
+        return
+    emit CharacterToken('&lt;')
+    tokenizer.state = SCRIPT_DATA                // reconsume, unchanged</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize a real <code>&lt;script&gt;...&lt;!--...--&gt;...&lt;/script&gt;</code> block containing an actual HTML-style comment (Module 7)</li>
+      <li>Handle a nested <code>&lt;script&gt;</code> inside an escaped comment (Module 8)</li>
+      <li>Enter script data from real markup — <code>&lt;script&gt;</code> the opening tag itself needs Module 9</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize ordinary JavaScript source with no embedded comments</li>
+      <li>Correctly recognize a real closing <code>&lt;/script&gt;</code> tag</li>
+      <li>Correctly hand off to the escape mechanism the instant <code>&lt;!</code> appears</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/06-script-base/js
+node --test</code></pre>
+<pre><code># tests 9
+# pass 9
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/06-script-base/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 6: Script Data Base States -- Java
+  PASS - <! emits both characters and switches to SCRIPT_DATA_ESCAPE_START
+  PASS - a matching end tag name closes script data and emits a real EndTagToken
+  ... (6 more)
+8 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my &lt;! test doesn't throw"</strong> — double-check
+<code>SCRIPT_DATA_ESCAPE_START</code> isn't accidentally already mapped to
+a real handler in <code>step()</code>; it should still fall through to the
+generic <code>NotImplementedError</code> fallback naming Module 7.<br>
+<strong>"tokens are missing the '&lt;' and '!' "</strong> — those two must
+be emitted <em>inside</em> the less-than-sign state itself, not deferred
+like the '/' branch — re-read the pseudocode's ordering.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the '/' branch of the
+less-than-sign state emits nothing and waits to see if a real end tag
+follows. The '!' branch emits both characters immediately and unconditionally,
+before knowing anything about what comes after. Why the difference — why
+doesn't '!' also wait and see?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because the '/' branch is trying to answer a real yes/no question ("is
+this actually a valid closing tag name, or not?") where the wrong guess
+would need to be undone — hence the careful buffering and backtracking
+machinery. The '!' branch isn't gambling on anything: <em>every</em> `<!`
+inside script data unconditionally enters the escape-start state, no
+exceptions, no failure case to backtrack from. Since there's nothing to
+potentially undo, there's no reason to defer emitting the tokens — spec
+authors apparently chose to just emit them immediately rather than
+threading them through the state that comes next for no benefit. It's a
+small but real lesson: buffering/backtracking exists specifically to
+handle genuine uncertainty, not as a default style to apply everywhere.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why would a script tag ever legitimately contain "&lt;!--" in real-world code?</div>
+    <div class="a">A: Historically, to hide script content from browsers old enough to not understand the &lt;script&gt; tag at all — those ancient browsers would render anything inside an unrecognized tag as plain text, so authors wrapped script bodies in an HTML comment, which those old browsers would correctly skip, while script-aware browsers were taught to specifically recognize and ignore that wrapping. Module 7 is that recognition mechanism.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is this "hide the script in a comment" trick still relevant today?</div>
+    <div class="a">A: The browsers it was designed for are long gone, but the exact tokenizer behavior it required got permanently baked into the HTML spec — and real, currently-running JavaScript minifiers/bundlers and some server-rendering tools still occasionally emit this pattern, or content that accidentally resembles it, so a modern browser still has to handle it correctly today.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does this module bother building the '!' handoff at all if Module 7 does all the real work?</div>
+    <div class="a">A: Because "does the handoff happen correctly, with the right two tokens already emitted, landing in exactly the right state" is itself a fully specified, independently testable piece of behavior — and getting it right now means Module 7 can start from a verified, trustworthy entry point instead of having to re-verify this module's work as a side effect.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 7 builds <code>SCRIPT_DATA_ESCAPE_START</code> and its five
+sibling states — the actual comment-hiding mechanism this module only
+dialed the phone for. It's the most state-dense single concept in the
+entire spec: distinguishing "we're inside the hidden comment" from
+"we're inside a nested, literal <code>&lt;script&gt;</code> tag someone
+typed as plain text within that comment," using nothing but a count of
+consecutive dashes and letters.</p>
+
+<div class="module-nav">
+  <a href="../05-rcdata-rawtext/tutorial.html">← Module 5: RCDATA/RAWTEXT/PLAINTEXT Families</a>
+  <a href="../07-script-escaped/tutorial.html">Module 7: Script Data Escaped States →</a>
+</div>
+
+</main>
+</body>
+</html>
