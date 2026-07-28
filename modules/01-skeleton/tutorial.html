@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 1: Token Types & Machine Skeleton</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #fb923c; }
+  .panel-grid { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; }
+  .btn { aspect-ratio: 1; border-radius: 3px; background: #2a2e3a; }
+  .btn.p1 { background: #fb923c; }
+  .btn.p2 { background: #38bdf8; }
+  .btn.p3 { background: #a78bfa; }
+  .btn.p4 { background: #f472b6; }
+  .btn.p5 { background: #4ade80; }
+  .btn.p6 { background: #facc15; }
+  .btn.p7 { background: #f87171; }
+  .btn.active { outline: 3px solid #fff; outline-offset: 1px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 0.8rem; font-size: 0.8rem; }
+  .legend span.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.35rem; vertical-align: middle; }
+  .flow { display: flex; flex-direction: column; gap: 0.6rem; font-family: "JetBrains Mono", monospace; font-size: 0.9rem; }
+  .flow .row { display: flex; align-items: center; gap: 0.7rem; }
+  .flow .box { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.9rem; background: var(--bg-raised); }
+  .flow .box.go { border-color: var(--good); color: var(--good); }
+  .flow .box.locked { border-color: var(--text-dim); color: var(--text-dim); }
+  .flow .arrow { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 1: Bare Metal Foundation · Module 1 of 16</span>Token Types &amp; Machine Skeleton</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../../prerequisites/finite-state-machines.html">Finite State Machines</a>
+  <a class="tag-link" href="../../prerequisites/input-streams-iterators.html">Input Streams &amp; Iterators</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">Not needed yet, but will be starting Module 3–4: <a href="../../prerequisites/lookahead-reconsume.html">Lookahead &amp; Reconsume</a>, <a href="../../prerequisites/unicode-codepoints-vs-utf16.html">Code Points vs. UTF-16</a>.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">Meet the elevator</div>
+<p>You've just been handed the keys to a brand-new 68-floor building. Your
+job today is <em>not</em> to decorate a single floor. Your job is to wire
+the elevator panel — a physical button for every one of the 68 floors — so
+that pressing any button does <em>something</em> predictable, even though
+you haven't built a single floor yet.</p>
+<p>You wire it like this: the ground floor button (let's call it "no one's
+here yet" — EOF) actually opens the doors, for real, right now. Every other
+button, when pressed, doesn't jam and doesn't stay silent. It lights up and
+announces, loudly and specifically: <em>"Floor 47 — Comment start — isn't
+built yet. Construction crew arrives in Module 13."</em></p>
+<p>That's the whole job. An honest, fully-labeled, mostly-locked building,
+with exactly one door that already opens for real.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>A <code>Tokenizer</code> is constructed with an input string. It sets
+  a position pointer to <code>0</code> and its current state to
+  <code>DATA</code> — the spec's mandated starting state.</li>
+  <li>The main loop calls <code>step()</code> repeatedly until a flag says
+  <code>halted</code>.</li>
+  <li><code>step()</code> checks the current state. Only one branch has
+  real logic: <code>DATA</code>. Every other state falls through to a
+  lookup: "which module owns this floor?" — and throws, naming it.</li>
+  <li>Inside the <code>DATA</code> branch: first check, is there a next
+  character at all? If not (EOF), emit an <code>EOFToken</code> and halt.
+  The loop stops. This is the one door that really opens.</li>
+  <li>If there <em>is</em> a next character, look at it. An <code>&amp;</code>
+  throws, naming Module 4. A <code>&lt;</code> throws, naming Module 9.
+  Anything else throws, naming Module 3 — the module that finishes the rest
+  of this very state.</li>
+  <li>Six token classes exist and can each be built and inspected directly,
+  independent of the loop — proven by tests that never call
+  <code>run()</code> at all for this part.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">All 68 buttons on the panel, colored by which future phase completes them. The single outlined button is DATA — the only one with real wiring today.</p>
+<div class="panel-grid">
+  <!-- Phase 1 (this module) -->
+  <div class="btn p1 active" title="Data (EOF branch only, this module)"></div>
+  <!-- Phase 2: modules 3-5 (approx 10 states) -->
+  <div class="btn p2" title="Character reference in data — Module 4"></div>
+  <div class="btn p2" title="RCDATA — Module 5"></div>
+  <div class="btn p2" title="Character reference in RCDATA — Module 4"></div>
+  <div class="btn p2" title="RAWTEXT — Module 5"></div>
+  <div class="btn p2" title="PLAINTEXT — Module 5"></div>
+  <div class="btn p2" title="RCDATA less-than sign — Module 5"></div>
+  <div class="btn p2" title="RCDATA end tag open — Module 5"></div>
+  <div class="btn p2" title="RCDATA end tag name — Module 5"></div>
+  <div class="btn p2" title="RAWTEXT less-than sign — Module 5"></div>
+  <div class="btn p2" title="RAWTEXT end tag open — Module 5"></div>
+  <div class="btn p2" title="RAWTEXT end tag name — Module 5"></div>
+  <!-- Phase 3: modules 6-8, script data (17 states) -->
+  <div class="btn p3" title="Script data — Module 6"></div>
+  <div class="btn p3" title="Script data less-than sign — Module 6"></div>
+  <div class="btn p3" title="Script data end tag open — Module 6"></div>
+  <div class="btn p3" title="Script data end tag name — Module 6"></div>
+  <div class="btn p3" title="Script data escape start — Module 7"></div>
+  <div class="btn p3" title="Script data escape start dash — Module 7"></div>
+  <div class="btn p3" title="Script data escaped — Module 7"></div>
+  <div class="btn p3" title="Script data escaped dash — Module 7"></div>
+  <div class="btn p3" title="Script data escaped dash dash — Module 7"></div>
+  <div class="btn p3" title="Script data escaped less-than sign — Module 7"></div>
+  <div class="btn p3" title="Script data escaped end tag open — Module 7"></div>
+  <div class="btn p3" title="Script data escaped end tag name — Module 7"></div>
+  <div class="btn p3" title="Script data double escape start — Module 8"></div>
+  <div class="btn p3" title="Script data double escaped — Module 8"></div>
+  <div class="btn p3" title="Script data double escaped dash — Module 8"></div>
+  <div class="btn p3" title="Script data double escaped dash dash — Module 8"></div>
+  <div class="btn p3" title="Script data double escaped less-than sign — Module 8"></div>
+  <div class="btn p3" title="Script data double escape end — Module 8"></div>
+  <!-- Phase 4: modules 9-11, tags/attrs (13 states) -->
+  <div class="btn p4" title="Tag open — Module 9"></div>
+  <div class="btn p4" title="End tag open — Module 9"></div>
+  <div class="btn p4" title="Tag name — Module 9"></div>
+  <div class="btn p4" title="Before attribute name — Module 10"></div>
+  <div class="btn p4" title="Attribute name — Module 10"></div>
+  <div class="btn p4" title="After attribute name — Module 10"></div>
+  <div class="btn p4" title="Before attribute value — Module 10"></div>
+  <div class="btn p4" title="Attribute value (double-quoted) — Module 10"></div>
+  <div class="btn p4" title="Attribute value (single-quoted) — Module 10"></div>
+  <div class="btn p4" title="Attribute value (unquoted) — Module 10"></div>
+  <div class="btn p4" title="Character reference in attribute value — Module 11"></div>
+  <div class="btn p4" title="After attribute value (quoted) — Module 10"></div>
+  <div class="btn p4" title="Self-closing start tag — Module 10"></div>
+  <!-- Phase 5: modules 12-13, comments (8 states) -->
+  <div class="btn p5" title="Bogus comment — Module 12"></div>
+  <div class="btn p5" title="Markup declaration open — Module 12"></div>
+  <div class="btn p5" title="Comment start — Module 13"></div>
+  <div class="btn p5" title="Comment start dash — Module 13"></div>
+  <div class="btn p5" title="Comment — Module 13"></div>
+  <div class="btn p5" title="Comment end dash — Module 13"></div>
+  <div class="btn p5" title="Comment end — Module 13"></div>
+  <div class="btn p5" title="Comment end bang — Module 13"></div>
+  <!-- Phase 6: module 14, doctype (16 states) -->
+  <div class="btn p6" title="DOCTYPE — Module 14"></div>
+  <div class="btn p6" title="Before DOCTYPE name — Module 14"></div>
+  <div class="btn p6" title="DOCTYPE name — Module 14"></div>
+  <div class="btn p6" title="After DOCTYPE name — Module 14"></div>
+  <div class="btn p6" title="After DOCTYPE public keyword — Module 14"></div>
+  <div class="btn p6" title="Before DOCTYPE public identifier — Module 14"></div>
+  <div class="btn p6" title="DOCTYPE public identifier (double-quoted) — Module 14"></div>
+  <div class="btn p6" title="DOCTYPE public identifier (single-quoted) — Module 14"></div>
+  <div class="btn p6" title="After DOCTYPE public identifier — Module 14"></div>
+  <div class="btn p6" title="Between DOCTYPE public and system identifiers — Module 14"></div>
+  <div class="btn p6" title="After DOCTYPE system keyword — Module 14"></div>
+  <div class="btn p6" title="Before DOCTYPE system identifier — Module 14"></div>
+  <div class="btn p6" title="DOCTYPE system identifier (double-quoted) — Module 14"></div>
+  <div class="btn p6" title="DOCTYPE system identifier (single-quoted) — Module 14"></div>
+  <div class="btn p6" title="After DOCTYPE system identifier — Module 14"></div>
+  <div class="btn p6" title="Bogus DOCTYPE — Module 14"></div>
+  <!-- Phase 7: modules 15-16 -->
+  <div class="btn p7" title="CDATA section — Module 15"></div>
+</div>
+<div class="legend">
+  <span><span class="dot" style="background:#fb923c;"></span>Phase 1 (this module)</span>
+  <span><span class="dot" style="background:#38bdf8;"></span>Phase 2 — text &amp; char refs</span>
+  <span><span class="dot" style="background:#a78bfa;"></span>Phase 3 — script data</span>
+  <span><span class="dot" style="background:#f472b6;"></span>Phase 4 — tags &amp; attrs</span>
+  <span><span class="dot" style="background:#4ade80;"></span>Phase 5 — comments</span>
+  <span><span class="dot" style="background:#facc15;"></span>Phase 6 — DOCTYPE</span>
+  <span><span class="dot" style="background:#f87171;"></span>Phase 7 — CDATA / capstone</span>
+</div>
+</div>
+
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Zooming into the one button that's actually wired — the DATA state's four possible outcomes:</p>
+<div class="flow">
+  <div class="row"><div class="box">DATA state</div><div class="arrow">— is there a next char? —</div></div>
+  <div class="row" style="padding-left:2rem;"><div class="arrow">no (EOF) →</div><div class="box go">emit EOFToken, halt ✓ real, working code</div></div>
+  <div class="row" style="padding-left:2rem;"><div class="arrow">yes, it's '&amp;' →</div><div class="box locked">throw → Module 4</div></div>
+  <div class="row" style="padding-left:2rem;"><div class="arrow">yes, it's '&lt;' →</div><div class="box locked">throw → Module 9</div></div>
+  <div class="row" style="padding-left:2rem;"><div class="arrow">yes, anything else →</div><div class="box locked">throw → Module 3</div></div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<p>This is language-agnostic — see <code>js/CODE_WALKTHROUGH.md</code> or
+<code>java/CODE_WALKTHROUGH.md</code> for exactly how each line below
+becomes real JavaScript or Java.</p>
+<pre><code>function RUN(input):
+    tokenizer = new Tokenizer(input)
+    while not tokenizer.halted:
+        STEP(tokenizer)
+    return tokenizer.tokens
+
+function STEP(tokenizer):
+    if tokenizer.state == DATA:
+        DATA_STATE(tokenizer)
+    else:
+        moduleNumber = lookup(tokenizer.state)
+        fail "not implemented", tokenizer.state, moduleNumber
+
+function DATA_STATE(tokenizer):
+    if tokenizer.atEOF():
+        emit EOFToken
+        tokenizer.halted = true
+        return
+    c = tokenizer.consume()
+    if c == '&':
+        fail "not implemented", "Character reference in data", 4
+    if c == '&lt;':
+        fail "not implemented", "Tag open", 9
+    fail "not implemented", "Data (character-emission branch)", 3
+</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize any real HTML text (even plain <code>"hello"</code> throws)</li>
+      <li>Decode a single character reference like <code>&amp;amp;</code></li>
+      <li>Recognize a single tag, attribute, comment, or doctype</li>
+      <li>Run this tokenizer against an actual web page</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Prove the dispatch loop terminates correctly on empty input</li>
+      <li>Prove all 68 states are addressable and correctly labeled</li>
+      <li>Construct and inspect all 6 spec-defined token types</li>
+      <li>Fail loudly, specifically, and testably for anything unbuilt</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/01-skeleton/js
+node --test</code></pre>
+<p>Real output from this exact code:</p>
+<pre><code># tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/01-skeleton/java
+javac *.java
+java TokenizerTest</code></pre>
+<p>Real output from this exact code:</p>
+<pre><code>Module 1: Token Types & Machine Skeleton -- Java
+
+  PASS - State enum has exactly 68 states
+  PASS - every state has a module hint
+  PASS - empty input immediately produces exactly one EOF token
+  PASS - a plain character throws pointing at Module 3
+  PASS - an ampersand throws pointing at Module 4
+  PASS - a less-than sign throws pointing at Module 9
+  PASS - a non-DATA state throws naming its own module
+  PASS - DoctypeToken name starts null (missing), not empty string
+  PASS - DoctypeToken forceQuirks starts false
+  PASS - StartTagToken holds a tag name and an empty attribute list
+  PASS - EndTagToken constructs
+  PASS - CommentToken data starts empty
+  PASS - CharacterToken holds exactly one character
+  PASS - EOFToken constructs
+
+14 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>JS: "node: command not found"</strong> — install Node 18+; this
+module uses nothing beyond <code>node:test</code>, built in since Node 18.<br>
+<strong>Java: "error: class Tokenizer is public, should be declared in a
+file named Tokenizer.java"</strong> — you're compiling from the wrong
+directory, or a stray file got renamed. Run <code>javac *.java</code> from
+inside <code>modules/01-skeleton/java/</code> exactly, not a parent folder.<br>
+<strong>Both: tests pass but you don't see why</strong> — try the "Try it
+yourself" exercise at the bottom of the matching <code>CODE_WALKTHROUGH.md</code>
+for your language; deliberately breaking one line and watching which
+specific test fails is the fastest way to build real intuition here.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> This module implements
+exactly one real branch — the DATA state's EOF check — out of everything
+in the entire 68-state machine. Why that branch, specifically? Module 9
+("Tag Name state") sounds, on paper, just as simple: read letters until you
+hit a space or <code>&gt;</code>. Why not implement <em>that</em> early
+instead, since it looks like comparable effort?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because Tag Name state doesn't start from nothing — the spec's own
+algorithm assumes you already arrived there <em>from</em> Tag Open state,
+with a half-built <code>StartTagToken</code> already sitting in a "current
+token" slot, and it assumes the initiating <code>&lt;</code> character has
+already been consumed. Implementing Tag Name state first would mean
+fabricating that upstream state by hand just to test it — which quietly
+defeats the entire point of this course: verifying real integration between
+states, not a collection of logic snippets tested in isolation. The DATA
+state's EOF branch is the only piece of logic in the <em>entire</em> spec
+that requires zero upstream setup — it's reachable the instant the
+tokenizer is constructed. That's not a coincidence; it's why the spec
+itself designates DATA as the mandatory starting state.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why throw an exception for unimplemented states instead of just returning a placeholder token?</div>
+    <div class="a">A: A placeholder token would be silently wrong — code calling this tokenizer would keep running with garbage output and you might not notice for weeks. A thrown, named, numbered exception fails the instant something unbuilt is reached, which is exactly what you want while the "building" is still 67/68ths unbuilt.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Do I really need 68 distinct state names? Couldn't the tokenizer just use numbers 1–68?</div>
+    <div class="a">A: It could, mechanically — nothing about a finite state machine requires human-readable labels. But every error message, every test failure, and every debugging session in the next 15 modules will be dramatically faster to reason about if a crash says "Comment end bang" instead of "state 51." The cost (typing out 68 strings once, here) is paid entirely in this module.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Real browsers don't throw NotImplementedError for anything — doesn't that mean this design is "wrong"?</div>
+    <div class="a">A: Real browsers ship a spec-complete tokenizer, so there's nothing left unimplemented to throw about. This exception type is scaffolding specific to the process of <em>building</em> one incrementally, the way construction scaffolding exists on a building site but isn't part of the finished building.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why build all six Token classes now if five of them aren't used until later modules?</div>
+    <div class="a">A: Because the spec defines all six in one preamble, before describing a single state — the token *shapes* aren't state-specific knowledge, they're shared vocabulary every state will eventually use. Building them once, now, and testing them directly (without needing a working tokenizer to produce one) is strictly less work than re-deriving each one's fields when its first consuming state shows up.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: What happens if I add a 69th state to my own State enum that isn't in the real spec?</div>
+    <div class="a">A: Nothing stops you mechanically — but it would immediately fail the "State enum has exactly 68 states" test in both languages, which exists specifically to catch that. That test is a tripwire, not a formality.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 2 (<strong>Input Stream Preprocessing</strong>) goes back to the
+very front of the pipeline — before any state runs at all — and handles the
+detail this module glossed over: raw HTML text needs its line endings
+normalized (CR and CRLF both become LF) before <code>pos</code> and
+<code>consume()</code> can be trusted to mean what Module 1 assumed they
+meant. Only after that's verified does Module 3 come back and finish the
+rest of the Data state this module only partially wired up.</p>
+
+<div class="module-nav">
+  <a href="../../prerequisite.html">← Prerequisites</a>
+  <a href="../02-input-stream/tutorial.html">Module 2: Input Stream Preprocessing →</a>
+</div>
+
+</main>
+</body>
+</html>
