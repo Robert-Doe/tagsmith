@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Code Points vs. UTF-16 Code Units — Prerequisites</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Prerequisite</span>Code Points vs. UTF-16 Code Units</h1>
+
+<div class="analogy-box">
+<div class="label">The Big Analogy</div>
+<p>A person's real identity is their full legal name — that's who they
+<em>are</em>, one single fact. But when you write that name on a postcard,
+sometimes it fits on one card, and sometimes the name is so long you need
+two postcards taped together, in order, to write the whole thing. Anyone
+reading just the second postcard alone would see a meaningless fragment —
+not a name, just half of one.</p>
+</div>
+
+<p>A <strong>Unicode code point</strong> is the "real identity" — a single
+number that names one character, like <code>U+0041</code> for the letter
+<code>A</code>, or <code>U+1F600</code> for 😀. A <strong>UTF-16 code
+unit</strong> is a postcard: a 16-bit chunk. Most code points (everything in
+the "Basic Multilingual Plane," which covers virtually all of English,
+Latin-script European languages, and the ASCII characters the tokenizer
+cares about most) fit on exactly one postcard. But code points above
+<code>U+FFFF</code> — most emoji, many rare CJK characters, some
+mathematical symbols — need <strong>two</strong> code units, called a
+<strong>surrogate pair</strong>, taped together in a specific order.</p>
+
+<h2>Why this is a prerequisite, not trivia</h2>
+<p>Both JavaScript strings and Java <code>String</code>/<code>char</code>
+are UTF-16 code-unit sequences, not code-point sequences. That means:</p>
+<ul>
+  <li>JavaScript's <code>str[i]</code>, <code>str.charAt(i)</code>, and
+  Java's <code>str.charAt(i)</code> all give you <strong>one code unit</strong>
+  — which might be half of a real character, if that character happens to
+  be a surrogate pair.</li>
+  <li><code>str.length</code> (JS) and <code>str.length()</code> (Java)
+  count code units, not "characters" in the everyday sense.</li>
+</ul>
+
+<div class="callout trouble">
+<div class="label">Where this could bite you in this course</div>
+<p>Every state machine transition in the spec is phrased in terms of "the
+current input character" as a code point. For tag names, attribute names,
+and the ASCII punctuation the tokenizer branches on (<code>&lt;</code>,
+<code>&amp;</code>, <code>&gt;</code>, quotes, <code>-</code>, <code>!</code>),
+this distinction never matters — they're all single-code-unit ASCII. It
+starts to matter once character <em>data</em> (text content, attribute
+values) can contain arbitrary user text, like an emoji typed into a
+<code>&lt;textarea&gt;</code>. This course's Module 1 Character token
+intentionally models one character as one code unit, which is a known,
+documented simplification — not an oversight — until it's revisited.</p>
+</div>
+
+<h2>Concrete example</h2>
+<pre><code>// JS
+"A".length        // 1  — one code unit, one code point, no surprise
+"😀".length        // 2  — one code point, but TWO code units (surrogate pair)
+
+// Java
+"A".length()       // 1
+"😀".length()       // 2
+</code></pre>
+
+<h2>How this connects</h2>
+<p>This matters wherever the spec talks about consuming "the next input
+character" — see <a href="input-streams-iterators.html">Input Streams &amp;
+Iterators</a>. It's also the reason Java's Module 1 <code>CharacterToken</code>
+stores a <code>char</code> (one UTF-16 code unit) rather than a full code
+point — a convention documented in that module's <code>DECISIONS.md</code>.</p>
+
+<div class="module-nav">
+  <a href="lookahead-reconsume.html">← Lookahead &amp; Reconsume</a>
+  <a href="../prerequisite.html">Prerequisites index →</a>
+</div>
+
+</main>
+</body>
+</html>

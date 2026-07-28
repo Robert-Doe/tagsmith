@@ -1,0 +1,265 @@
+/* ============================================================
+   Browser Tokenization Course — shared design system
+   Dark theme. One --accent variable per page overrides the look.
+   Linked by every tutorial.html / prerequisite page in the course.
+   ============================================================ */
+
+:root {
+  --accent: #38bdf8; /* default: prerequisites cyan. Pages override this. */
+  --bg: #0f1115;
+  --bg-raised: #171a21;
+  --bg-card: #1c1f28;
+  --text: #e6e8ef;
+  --text-dim: #9aa1b1;
+  --border: #2a2e3a;
+  --code-bg: #11131a;
+  --good: #4ade80;
+  --bad: #f87171;
+  --warn: #fbbf24;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+}
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 5rem;
+}
+
+h1, h2, h3, .display {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 700;
+  color: var(--text);
+}
+
+h1 {
+  font-size: 2.4rem;
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+h1 .kicker {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: 1.6rem;
+  margin-top: 3rem;
+  color: var(--accent);
+  border-left: 5px solid var(--accent);
+  padding-left: 0.7rem;
+}
+
+h3 {
+  font-size: 1.15rem;
+  color: var(--text);
+  margin-top: 1.75rem;
+}
+
+p, li { color: var(--text); }
+a { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+a:hover { text-decoration-color: var(--accent); }
+
+code, pre, .mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+code {
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  border: 1px solid var(--border);
+}
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-size: 0.88rem;
+}
+pre code { border: none; background: none; padding: 0; }
+
+/* ---- Prerequisite tag-links (used in section 00) ---- */
+.tag-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+.tag-link {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.tag-link:hover { background: var(--accent); color: var(--bg); }
+
+/* ---- The Big Analogy box ---- */
+.analogy-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+}
+.analogy-box .label {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+/* ---- Generic callout ---- */
+.callout {
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.callout.trouble { border-left: 4px solid var(--warn); }
+.callout.trouble .label { color: var(--warn); }
+.callout .label { font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }
+
+/* ---- Step list ---- */
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.6rem 0 0.6rem 2.6rem;
+  border-bottom: 1px dashed var(--border);
+}
+.steps li:last-child { border-bottom: none; }
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ---- Compare box (Limits section) ---- */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+@media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
+.compare-col { border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid var(--border); }
+.compare-col.cant { border-top: 3px solid var(--bad); }
+.compare-col.can { border-top: 3px solid var(--good); }
+.compare-col h4 { margin-top: 0; font-family: inherit; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.compare-col.cant h4 { color: var(--bad); }
+.compare-col.can h4 { color: var(--good); }
+.compare-col ul { padding-left: 1.1rem; margin: 0; }
+
+/* ---- Q&A ---- */
+.qa { margin: 1rem 0 2rem; }
+.qa-item { margin-bottom: 1.25rem; }
+.qa-item .q { font-weight: 700; color: var(--accent); }
+.qa-item .a { margin-top: 0.25rem; }
+
+/* ---- Brain Exercise ---- */
+.brain {
+  background: var(--bg-card);
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+}
+details.reveal { margin-top: 1rem; }
+details.reveal summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 700;
+}
+details.reveal[open] summary { margin-bottom: 0.75rem; }
+
+/* ---- Diagram box ---- */
+.diagram-box {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+/* ---- Tables ---- */
+table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.92rem; }
+th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+th { background: var(--bg-raised); color: var(--accent); }
+tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-raised) 60%, transparent); }
+
+/* ---- Footer nav ---- */
+.module-nav {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+.module-nav .disabled { color: var(--text-dim); }
+.module-nav a { text-decoration: none; }
+
+/* ---- Home / index tiles ---- */
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.tile {
+  display: block;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color .15s ease, transform .15s ease;
+}
+.tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+.tile .tile-title { font-family: "Playfair Display", serif; font-size: 1.1rem; color: var(--accent); display: block; margin-bottom: 0.35rem; }
+.tile .tile-desc { font-size: 0.85rem; color: var(--text-dim); }
+
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lookahead &amp; Reconsume — Prerequisites</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Prerequisite</span>Lookahead &amp; Reconsume</h1>
+
+<div class="analogy-box">
+<div class="label">The Big Analogy</div>
+<p>You're reading a word out loud, finger sliding under each letter as you
+go: <em>c...a...t</em>. Then your finger lands on a space. You suddenly
+realize: "wait, that space isn't part of <em>this</em> word — it's the
+boundary before the <em>next</em> one." You don't un-see the space. You just
+slide your finger back under it and read it again, but this time with the
+mental rule "I'm now looking for the start of a new word," not "I'm still
+spelling <em>cat</em>."</p>
+</div>
+
+<p>That's <strong>reconsume</strong>. It shows up constantly in the
+tokenization spec as the exact phrase: <em>"Reconsume the current input
+character in the &lt;some other&gt; state."</em> It means: don't advance the
+input position, but do switch to a different state and process that same
+character again — this time under the new state's rules.</p>
+
+<h2>Three related but distinct moves</h2>
+<ul>
+  <li><strong>Consume</strong> — read the current character and move the
+  position forward. (Covered in <a href="input-streams-iterators.html">Input
+  Streams &amp; Iterators</a>.)</li>
+  <li><strong>Lookahead</strong> — peek at upcoming characters (sometimes
+  several at once, e.g. checking if the next few characters spell
+  <code>DOCTYPE</code>) without consuming any of them, purely to decide what
+  to do.</li>
+  <li><strong>Reconsume</strong> — take a character that <em>was already
+  consumed</em>, don't advance the position again, and process it under a
+  new state. The character gets "used" twice, by two different states, but
+  the input position only ever moves once for it.</li>
+</ul>
+
+<div class="callout">
+<div class="label">Why the spec needs this move at all</div>
+<p>Without reconsume, every state that needs to hand off to another state
+based on "the character I just saw" would have to smuggle that character
+along as extra data. Reconsume avoids that: the <em>next</em> state just
+reads the input stream normally and gets the same character back, because
+the position marker never moved. It's a clean way to say "change your mind
+about how to interpret what you just read," using the same read mechanism
+every state already has.</p>
+</div>
+
+<h2>Pseudocode shape</h2>
+<pre><code>function reconsume(newState):
+    position = position - 1   // put it back
+    state = newState          // change how we'll interpret it
+    // the main loop will now consume() this same character again
+</code></pre>
+<p>In practice, most real implementations don't literally decrement a
+position twice — they just skip calling <code>consume()</code> once and jump
+straight to the new state's logic with the character they already have in
+hand. Same effect, one fewer redundant read.</p>
+
+<h2>How this connects</h2>
+<p>Reconsume only makes sense once you already have a
+<a href="finite-state-machines.html">state machine</a> to switch into and an
+<a href="input-streams-iterators.html">input stream</a> with a position to
+rewind. You won't need this move yet in Module 1 (it has no branching logic
+to reconsume from) — it becomes essential starting with the Data state in
+Module 3.</p>
+
+<div class="module-nav">
+  <a href="input-streams-iterators.html">← Input Streams &amp; Iterators</a>
+  <a href="unicode-codepoints-vs-utf16.html">Code Points vs. UTF-16 →</a>
+</div>
+
+</main>
+</body>
+</html>

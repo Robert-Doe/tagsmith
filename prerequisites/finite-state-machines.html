@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Finite State Machines — Prerequisites</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Prerequisite</span>Finite State Machines</h1>
+
+<div class="analogy-box">
+<div class="label">The Big Analogy</div>
+<p>Picture a board game with 68 numbered rooms. You are a single token
+standing in exactly one room at a time — never two, never none. Each room
+has a little rulebook taped to the door: <em>"if you draw a card that says
+X, walk to room 12. If it says Y, walk to room 40. Otherwise, stay here and
+do nothing."</em> That's it. That's the entire game. You never need to
+remember which rooms you visited before — the rulebook for the room
+you're standing in <em>right now</em> is the only thing that decides your
+next move.</p>
+</div>
+
+<p>That board game <em>is</em> a finite state machine (FSM), and it is
+exactly the model the HTML5 tokenizer is built on. The spec says so
+explicitly: "the tokenization stage... consists of ... a state machine."</p>
+
+<h2>The four ingredients</h2>
+<ul>
+  <li><strong>States</strong> — the rooms. The tokenizer has 68 of them
+  (Data, Tag open, Comment end dash, DOCTYPE, ...). Each has a name straight
+  out of the spec's section headings.</li>
+  <li><strong>The current state</strong> — which room you're standing in
+  right now. Just one variable, holding just one value, at any moment.</li>
+  <li><strong>Input</strong> — the card you draw each turn. For the
+  tokenizer, that's the next character from the HTML text.</li>
+  <li><strong>Transitions</strong> — the rulebook. Given the current state
+  and the input character, exactly one thing happens next: maybe you move to
+  a new state, maybe you stay, and maybe something gets produced (a token)
+  along the way.</li>
+</ul>
+
+<h2>Why "finite" and why it matters here</h2>
+<p>"Finite" just means the room count is fixed and known in advance — 68,
+not "as many as needed." That's a big deal for an implementer: it means you
+can draw the <em>entire</em> map before writing a single line of real logic.
+Module 1 of this course does exactly that — it builds all 68 rooms as empty,
+correctly-labeled placeholders before a single one of them does real work.</p>
+
+<div class="callout">
+<div class="label">The one rule that makes this tractable</div>
+<p>The next state depends <strong>only</strong> on the current state and the
+current input character — never on anything that happened three moves ago.
+This is what lets the spec describe 68 rooms independently, each in its own
+short section, instead of one giant tangled paragraph of "it depends."</p>
+</div>
+
+<h2>Pseudocode shape</h2>
+<pre><code>state = START_STATE
+while not done:
+    input = next_input_symbol()
+    (state, output) = transition(state, input)
+    if output: produce(output)
+</code></pre>
+<p>Every single one of the 68 sections in the spec is really just describing
+one branch of that <code>transition()</code> function. Nothing more exotic
+is happening under the hood.</p>
+
+<h2>How this connects</h2>
+<p>Pair this with <a href="input-streams-iterators.html">Input Streams &amp;
+Iterators</a> (where the "input" side of the transition comes from) and
+<a href="lookahead-reconsume.html">Lookahead &amp; Reconsume</a> (a special
+move the spec uses constantly: undoing one step of input consumption).</p>
+
+<div class="module-nav">
+  <a href="../prerequisite.html">← Prerequisites index</a>
+  <a href="input-streams-iterators.html">Input Streams &amp; Iterators →</a>
+</div>
+
+</main>
+</body>
+</html>

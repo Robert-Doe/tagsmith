@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Input Streams &amp; Iterators — Prerequisites</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Prerequisite</span>Input Streams &amp; Iterators</h1>
+
+<div class="analogy-box">
+<div class="label">The Big Analogy</div>
+<p>Imagine reading a scroll through a narrow viewing window cut into a piece
+of cardboard. The scroll doesn't move — <em>you</em> slide the cardboard
+along it, one character-width at a time. At any instant you can only see
+what's directly under the window: one character. You always know exactly
+how far you've slid (your position), and you know you're done when there's
+no more scroll left to slide onto.</p>
+</div>
+
+<p>That's an <strong>input stream</strong>: a sequence of characters plus a
+moving position marker. The spec calls the position marker's target the
+"current input character," and it defines the tokenizer's entire job as
+repeatedly asking one question: <em>"consume the next input character —
+what is it, and what should I do because of it?"</em></p>
+
+<h2>Two moves, and only two</h2>
+<ul>
+  <li><strong>Peek</strong> — look at the character under the window without
+  sliding the cardboard. Position doesn't change.</li>
+  <li><strong>Consume</strong> — slide the cardboard forward by one and
+  report what was under the window before you moved. Position advances by
+  one.</li>
+</ul>
+<p>Almost every sentence in the tokenization spec that starts with "Consume
+the next input character" is just this second move, over and over, tens of
+thousands of times per page load.</p>
+
+<h2>Knowing when you're out of scroll</h2>
+<p>There has to be a special answer for "there is no next character" — the
+spec calls this <strong>EOF</strong> (end-of-file), and it is treated as its
+own distinct signal, not as some particular character value like
+<code>null</code> or <code>0</code>. Every state in the spec that reads
+input has to say what happens on EOF, separately from what happens on any
+real character.</p>
+
+<div class="callout">
+<div class="label">Why this distinction matters later</div>
+<p>In Module 1, the very first piece of <em>real</em> logic this whole
+course writes is exactly this EOF check — "is there a next character, or
+not" — because it turns out to be the single simplest correct behavior in
+the entire 68-state machine: no input, no work, just report "done."</p>
+</div>
+
+<h2>Pseudocode shape</h2>
+<pre><code>stream = characters of the input text
+position = 0
+
+function peek():
+    if position >= length(stream): return EOF
+    return stream[position]
+
+function consume():
+    c = peek()
+    if c != EOF: position = position + 1
+    return c
+</code></pre>
+
+<h2>How this connects</h2>
+<p>This is the "input" half of a <a href="finite-state-machines.html">finite
+state machine</a>'s transition function. And because sometimes a state reads
+a character, changes its mind, and needs to "un-read" it, see
+<a href="lookahead-reconsume.html">Lookahead &amp; Reconsume</a> next.</p>
+
+<div class="module-nav">
+  <a href="finite-state-machines.html">← Finite State Machines</a>
+  <a href="lookahead-reconsume.html">Lookahead &amp; Reconsume →</a>
+</div>
+
+</main>
+</body>
+</html>
