@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 13: Comment States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#34d399;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 5: Comments &amp; Markup Declarations · Module 13 of 16</span>Comment States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../12-markup-declaration/tutorial.html">Module 12: Markup Declaration Open &amp; Bogus Comment</a>
+  <a class="tag-link" href="../07-script-escaped/tutorial.html">Module 7: Script Data Escaped States</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The doorman's counting trick, a fourth time — with a twist ending</div>
+<p>This is the same doorman from Module 7, counting dashes to know when to
+open the door. But this doorman has one more quirk their script-data
+cousin didn't: if, right as the bell should ring, they instead hear an
+exclamation mark, they don't panic — they treat it as one <em>more</em>
+chance to close, just through a slightly unusual side door. Ring the bell
+after that exclamation mark, and the door still opens (with a note in the
+log: "that was an odd way to ask"). Say anything else instead, and the
+doorman shrugs, writes down everything they'd been provisionally holding
+onto — dashes, exclamation mark, all of it — as if it were never a
+knock at all, and goes back to just listening to ordinary conversation.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 12 already consumed <code>&lt;!--</code> and created an
+  empty comment token. Zero dashes are "pending."</li>
+  <li>Count dashes: zero, one, two-or-more — the same three-state pattern
+  Modules 7 and 8 already used for <code>&lt;script&gt;</code>'s hidden
+  comments.</li>
+  <li>From two-or-more dashes, <code>&gt;</code> closes normally. A third
+  (or fourth, or fifth) dash just keeps waiting. Anything else gives
+  <em>both</em> confirmed dashes back to the data and starts counting
+  from zero again.</li>
+  <li>From two-or-more dashes, <code>!</code> is a special detour: maybe
+  this is the legacy <code>--!&gt;</code> close.</li>
+  <li>From that detour, <code>&gt;</code> really does close the comment
+  (with a parse error). A following dash starts a brand-new count. Anything
+  else gives back all three held characters (<code>--!</code>) as literal
+  data.</li>
+  <li>EOF, from any comment state, still emits the comment token — partial
+  content is preserved, never silently dropped.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input</th><th>Result</th></tr>
+<tr><td><code>&lt;!--hello--&gt;</code></td><td>data = <code>"hello"</code></td></tr>
+<tr><td><code>&lt;!--hi----&gt;</code></td><td>data = <code>"hi--"</code> — extra dashes become literal</td></tr>
+<tr><td><code>&lt;!--hi--!&gt;</code></td><td>data = <code>"hi"</code>, closes (parse error)</td></tr>
+<tr><td><code>&lt;!--a--!b--&gt;</code></td><td>data = <code>"a--!b"</code> — the whole "--!" comes back as text</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function COMMENT_END_STATE(tokenizer):
+    c = tokenizer.consume()
+    if c == '&gt;':
+        emit tokenizer.currentToken
+        tokenizer.state = DATA
+        return
+    if c == '!':
+        tokenizer.state = COMMENT_END_BANG
+        return
+    if c == '-':
+        tokenizer.currentToken.data += '-'   // a third+ dash: keep waiting
+        return
+    // anything else: BOTH confirmed dashes were never a real close
+    tokenizer.currentToken.data += '--'
+    tokenizer.state = COMMENT
+    reconsume c there</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize a real <code>&lt;!DOCTYPE&gt;</code>'s internal structure (Module 14)</li>
+      <li>Tokenize real CDATA content (Module 15)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize any real HTML comment, start to finish, from real markup</li>
+      <li>Correctly handle every dash-counting edge case, including the legacy <code>--!&gt;</code> close</li>
+      <li>Preserve partial comment content even when input is truncated mid-comment</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/13-comments/js
+node --test</code></pre>
+<pre><code># tests 13
+# pass 13
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/13-comments/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 13: Comment States -- Java
+  PASS - extra dashes right before the close become part of the data
+  PASS - --!> closes the comment, with a parse error
+  PASS - --! followed by another - starts a fresh close attempt
+  ... (9 more)
+12 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my extra-dash test is missing characters"</strong> — this is
+the single easiest mistake in this module: forgetting to append the dash
+in <code>COMMENT_END</code>'s own <code>'-'</code> branch. See this
+module's own DECISIONS.md for a live, verified example of exactly this
+bug and which test catches it.<br>
+<strong>"--!&gt; doesn't close my comment"</strong> — double-check
+<code>COMMENT_END_BANG</code>'s <code>'&gt;'</code> branch actually emits
+and switches to Data (with a parse error) rather than treating it as a
+hard failure.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> Modules 7, 8, and 13 all
+build a dash-counting mechanism for recognizing <code>-->'</code>. But
+only Module 13's version has the extra <code>--!&gt;</code> detour — the
+script-data escape states in Modules 7 and 8 have no equivalent. Why would
+HTML comments specifically need to tolerate this legacy quirk, when the
+script-data hidden-comment mechanism (which is <em>also</em>, mechanically,
+an HTML comment) doesn't?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because real, historical HTML comments in the wild — written directly by
+people and by early tools, going back to the very earliest days of the
+web — sometimes used <code>--!&gt;</code> as a stylistic close, a
+convention borrowed from SGML comment syntax (HTML's ancestor markup
+language, where <code>--!&gt;</code> and similar constructs had defined
+meaning). That legacy exists specifically for ordinary, human-authored
+comments. The hidden-comment mechanism inside <code>&lt;script&gt;</code>
+tags (Modules 7–8), despite being built from literally the same
+punctuation, was never something a human directly hand-wrote as a
+"comment" in the SGML sense — it's a browser-compatibility mechanism, not
+an authoring convention, so there was never a body of real-world
+<code>--!&gt;</code>-terminated script content the spec needed to stay
+compatible with. Same-looking syntax, different real-world history, different
+spec treatment — a good reminder that "why does the spec do X" often has
+a historical answer, not a logical one.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Does this module change what a well-formed comment (just &lt;!--text--&gt;, nothing weird) looks like at all?</div>
+    <div class="a">A: No — every edge case this module handles (abrupt closes, extra dashes, the "--!" detour) only matters for MALFORMED or unusual comment syntax. A comment written the ordinary way tokenizes through the same states, but never touches any of the "give back what I provisionally swallowed" logic at all.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does an unclosed comment at EOF still emit a token, when an unclosed TAG (Module 9) doesn't?</div>
+    <div class="a">A: A tag's entire meaning depends on structural pieces that might still be incomplete at EOF — a name that's still being typed, attributes mid-value, nothing usable yet. A comment's meaning is just "whatever text is inside it," which is already fully formed and usable the instant you have ANY of it, complete or not. Emitting a truncated comment loses nothing that was ever going to be structurally meaningful; emitting a truncated tag would misrepresent something that was never finished.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is a bogus comment (Module 12) tokenized any differently once it reaches the tree-construction stage, compared to a "real" comment from this module?</div>
+    <div class="a">A: Not by anything this course's Track 1 tokenizer does — both are plain CommentTokens with no distinguishing marker. Any downstream difference in how a real HTML processor treats them would have to come from something outside the token itself, like a diagnostic tool cross-referencing this tokenizer's separately-recorded parse-error log.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 14 tackles the biggest single state cluster in the entire spec:
+all sixteen DOCTYPE sub-states, from the deceptively simple
+<code>&lt;!DOCTYPE html&gt;</code> up through legacy
+<code>PUBLIC</code>/<code>SYSTEM</code> identifier doctypes — and the
+force-quirks flag that decides whether a whole document renders in quirks
+mode.</p>
+
+<div class="module-nav">
+  <a href="../12-markup-declaration/tutorial.html">← Module 12: Markup Declaration Open &amp; Bogus Comment</a>
+  <a href="../14-doctype/tutorial.html">Module 14: DOCTYPE States →</a>
+</div>
+
+</main>
+</body>
+</html>
