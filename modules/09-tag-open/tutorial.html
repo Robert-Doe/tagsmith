@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 9: Tag Open / End Tag Open / Tag Name</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #f472b6; }
+  .layers { display: flex; flex-direction: column; gap: 0.5rem; font-family: "JetBrains Mono", monospace; font-size: 0.85rem; }
+  .layers .layer { border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem 1rem; }
+  .layers .layer.tokenizer { background: color-mix(in srgb, var(--accent) 12%, var(--bg-raised)); border-color: var(--accent); }
+  .layers .layer.tree { background: var(--bg-raised); color: var(--text-dim); }
+  .layers .arrow-down { text-align: center; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 4: Tags &amp; Attributes · Module 9 of 16</span>Tag Open / End Tag Open / Tag Name</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../03-data-state/tutorial.html">Module 3: Data State</a>
+  <a class="tag-link" href="../05-rcdata-rawtext/tutorial.html">Module 5: RCDATA/RAWTEXT/PLAINTEXT Families</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A mail sorter who never reads the letters</div>
+<p>Picture a postal worker whose entire job is: look at the address on the
+outside of an envelope, decide which numbered bin it goes in, and drop it
+there — without ever opening the envelope or knowing what's inside, or
+what the recipient does with it. That worker is this module. When it sees
+<code>&lt;textarea&gt;</code> go by, it correctly bins it as "a start tag
+named textarea" — full stop. It has no idea, and no way of knowing, that
+somewhere down the line, a completely different department (tree
+construction — not part of this course's Track 1 at all) is going to read
+that label and say "oh, this means the mail carrier should switch to a
+special truck route for a while." The sorter's job ends the moment the
+envelope hits the bin.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Data state already consumed <code>&lt;</code> and switched here.</li>
+  <li>An ASCII letter means a real tag is starting — create a fresh
+  <code>StartTagToken</code> (or, from the <code>/</code> path,
+  <code>EndTagToken</code>), and reconsume that same letter in Tag Name
+  state.</li>
+  <li>Tag Name state consumes letters one at a time, lowercasing uppercase
+  ones, building up <code>tagName</code>.</li>
+  <li><code>&gt;</code> unconditionally emits the tag and returns to Data
+  state — <strong>no "is this the right tag" check happens here</strong>,
+  unlike RCDATA/RAWTEXT/script-data's end-tag-name states.</li>
+  <li>If the emitted token is a start tag, <code>lastStartTagName</code>
+  gets updated — quietly fulfilling the contract Module 5 set up four
+  modules ago.</li>
+  <li>Then: back to Data state. Nothing about the tag name that was just
+  parsed changes what state comes next. That decision belongs to a layer
+  this course's Track 1 deliberately does not build.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Where the state-switching decision actually lives:</p>
+<div class="layers">
+  <div class="layer tree">Tree construction (Track 2, Module A1) — reads tokens, decides "this start tag named 'textarea' means: tell the tokenizer to switch to RCDATA now"</div>
+  <div class="arrow-down">▲ tokens flow up, instructions flow back down ▼</div>
+  <div class="layer tokenizer">This tokenizer (Track 1, Module 9) — emits a StartTagToken(tagName="textarea"), returns to DATA, and moves on. No memory of what "textarea" means.</div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function TAG_NAME_STATE(tokenizer):
+    c = tokenizer.consume()          // may be EOF
+    if c in {TAB, LF, FF, SPACE}: tokenizer.state = BEFORE_ATTRIBUTE_NAME; return
+    if c == '/':                     tokenizer.state = SELF_CLOSING_START_TAG; return
+    if c == '&gt;':
+        emit tokenizer.currentToken   // UNCONDITIONAL -- no appropriateness check
+        if currentToken is a StartTagToken:
+            tokenizer.lastStartTagName = currentToken.tagName
+        tokenizer.state = DATA
+        return
+    if c is uppercase ASCII letter:  currentToken.tagName += lowercase(c); return
+    if c is NUL:                     currentToken.tagName += U+FFFD; return   // IN the name
+    if c is EOF:                     emit EOFToken; halt              // token discarded
+    currentToken.tagName += c</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Parse a single attribute (Module 10 — every attribute-bearing tag test in this module deliberately stops there)</li>
+      <li>Handle <code>&lt;!DOCTYPE&gt;</code> or real comments (Module 12)</li>
+      <li>Make <code>&lt;textarea&gt;</code>/<code>&lt;script&gt;</code> content behave specially (Track 2, Module A1 — not this course's Track 1 at all)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize any tag-name-only markup, start or end tags</li>
+      <li>Correctly maintain <code>lastStartTagName</code> from real input, not test fixtures</li>
+      <li>Correctly demonstrate — not just describe — the tokenizer/tree-construction boundary</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/09-tag-open/js
+node --test</code></pre>
+<pre><code># tests 17
+# pass 17
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/09-tag-open/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 9: Tag Open / End Tag Open / Tag Name -- Java
+  PASS - the tokenizer does NOT auto-switch to RCDATA for <textarea>
+  PASS - without tree construction, a nested tag inside would-be RCDATA content overwrites lastStartTagName
+  ... (14 more)
+16 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my textarea test produces different token counts than expected"</strong>
+— if you're getting 3 tokens instead of 4 for
+<code>"&lt;textarea&gt;x&lt;/textarea&gt;"</code>, you may have
+accidentally added RCDATA-switching logic to <code>tagNameState</code> —
+this module deliberately does NOT do that; double-check against DECISIONS.md.<br>
+<strong>"NUL in a tag name shows up as two things"</strong> — it should
+change the <code>tagName</code> string only, not also emit a separate
+character token; re-check the NUL branch doesn't call <code>emit()</code>.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> Modules 5 through 8 all had
+to force-set the tokenizer's starting state directly (e.g.
+<code>tokenizer.state = State.RCDATA</code>) to test RCDATA/RAWTEXT/
+script-data content, rather than just feeding real
+<code>&lt;textarea&gt;...&lt;/textarea&gt;</code> markup starting from
+Data state. Now that Module 9 exists and real <code>&lt;textarea&gt;</code>
+tags tokenize correctly — does that force-setting trick stop being
+necessary?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>No — if anything, Module 9 proves it was <em>never</em> a workaround for
+something temporarily missing, and is instead the only correct way to
+exercise those states within Track 1 at all. This module's own
+"<textarea>x</textarea>" test demonstrates directly: feeding that real
+markup through the full tokenizer, starting from Data state, does NOT
+produce RCDATA-style tokenization — it produces a start tag, one ordinary
+character, and an end tag, because nothing in this tokenizer ever decides
+to switch into RCDATA. The only way to observe RCDATA state's real
+behavior is still to force it directly, exactly as Modules 5–8 did,
+because the code that would trigger it under real conditions belongs to
+tree construction — a layer this track doesn't build. Track 2's Module A1
+is where that force-setting trick finally gets replaced by something
+automatic, because that's where the missing layer gets built.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: This seems like a strange way to design a tokenizer. Wouldn't it be simpler to just have it know about textarea/script/style directly?</div>
+    <div class="a">A: It would be simpler for this one case, but it would break the tokenizer/tree-construction separation the rest of the spec depends on — tree construction sometimes needs to change the tokenizer's state for reasons that have NOTHING to do with the tag name alone (foreign content rules for SVG/MathML, for instance, which Module 15's CDATA section touches on). Keeping the tokenizer "dumb" about semantics and purely mechanical about syntax is what makes the two stages independently specifiable, testable, and — relevant to this course specifically — independently buildable as two separate tracks.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Real browsers clearly DO render &lt;textarea&gt; content as raw text. If the tokenizer alone can't do that, how does it actually happen?</div>
+    <div class="a">A: Exactly the mechanism this module's Brain Exercise points at: a real browser's tree constructor, upon receiving the StartTagToken for "textarea," issues an explicit instruction back to the tokenizer ("switch to RCDATA now") before any more input is consumed. It's a real, two-way feedback loop between the two stages, not two independent passes. Track 2's Module A1 builds a minimal version of exactly this loop.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does U+FFFD replace NUL inside a tag name, but Data state just leaves NUL alone?</div>
+    <div class="a">A: A character token's data IS visible text content in the final document — preserving the literal NUL there is at least consistent with "don't invent characters that weren't in the source." A tag name, by contrast, is never displayed as text; it's an internal identifier the tree constructor will compare against known element names. Embedding a literal NUL byte inside that identifier risks it being used in more sensitive processing than "displayed on screen," which is exactly the class of thing U+FFFD-substitution defends against — foreshadowing Track 2's Module A3 on parser-differential security issues.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 10 builds the next seam this module deliberately left dangling:
+<code>BEFORE_ATTRIBUTE_NAME</code> and everything downstream of it —
+turning <code>&lt;div class="x"&gt;</code> from "a tag named div, and then
+some other stuff" into a tag with a real, structured attribute list.</p>
+
+<div class="module-nav">
+  <a href="../08-script-double-escaped/tutorial.html">← Module 8: Script Data Double Escaped States</a>
+  <a href="../10-attributes/tutorial.html">Module 10: Attribute Name &amp; Value States →</a>
+</div>
+
+</main>
+</body>
+</html>
