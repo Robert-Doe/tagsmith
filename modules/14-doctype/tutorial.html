@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 14: DOCTYPE States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#facc15;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 6: DOCTYPE · Module 14 of 16</span>DOCTYPE States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../12-markup-declaration/tutorial.html">Module 12: Markup Declaration Open &amp; Bogus Comment</a>
+  <a class="tag-link" href="../01-skeleton/tutorial.html">Module 1: Token Types &amp; Machine Skeleton</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A passport control officer with one very specific stamp</div>
+<p>An immigration officer checks a passport: name, and optionally two
+supporting reference numbers (a "public" registry number, a "system" file
+number). Most travelers only show the name. Some show name plus one
+reference number. A few show both. The officer accepts all three
+combinations without blinking — that's completely normal. But the instant
+something looks tampered with — a name that's missing entirely, a
+reference number with no closing quote on its supporting document — the
+officer doesn't just note an error and move on. They stamp the passport
+"UNRELIABLE — VERIFY MANUALLY," a stamp that follows this traveler through
+every subsequent checkpoint. That stamp is <code>forceQuirks</code>.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 12 already consumed <code>DOCTYPE</code>. A name is expected
+  next — most real doctypes are just <code>&lt;!DOCTYPE html&gt;</code>,
+  nothing more.</li>
+  <li>After the name, check: does what follows spell <code>PUBLIC</code>
+  or <code>SYSTEM</code> (any case)? If neither, and it isn't
+  <code>&gt;</code>, the whole rest of the declaration is malformed —
+  force quirks, discard everything until <code>&gt;</code>.</li>
+  <li><code>PUBLIC</code> expects a quoted public identifier, optionally
+  followed by a quoted system identifier. <code>SYSTEM</code> alone
+  expects just a system identifier.</li>
+  <li>Every one of these sixteen states has its own EOF branch, but
+  they're all identical: force quirks, emit whatever's been built so far,
+  emit an EOF token, stop.</li>
+  <li>One single state — the moment right after a COMPLETE, validly-quoted
+  system identifier — treats leftover garbage before <code>&gt;</code> as
+  harmless noise instead of a reason to force quirks.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input</th><th>name</th><th>publicIdentifier</th><th>systemIdentifier</th><th>forceQuirks</th></tr>
+<tr><td><code>&lt;!DOCTYPE html&gt;</code></td><td>html</td><td>null</td><td>null</td><td>false</td></tr>
+<tr><td><code>&lt;!DOCTYPE html PUBLIC "-//W3C//..."&gt;</code></td><td>html</td><td>"-//W3C//..."</td><td>null</td><td>false</td></tr>
+<tr><td><code>&lt;!DOCTYPE &gt;</code> (no name)</td><td>null</td><td>null</td><td>null</td><td><strong>true</strong></td></tr>
+<tr><td><code>&lt;!DOCTYPE html SYSTEM "x" junk&gt;</code></td><td>html</td><td>null</td><td>"x"</td><td><strong>false</strong> (the one exception)</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function AFTER_DOCTYPE_NAME_STATE(tokenizer):
+    c = tokenizer.consume()
+    if c in {TAB, LF, FF, SPACE}: return          // ignore, stay
+    if c == '&gt;': emit tokenizer.currentToken; tokenizer.state = DATA; return
+    if c == EOF: forceQuirksAndEmit(tokenizer); return
+
+    tokenizer.pos -= 1                              // un-consume for lookahead
+    if tokenizer.matchCaseInsensitive("PUBLIC"):
+        consume 6 characters
+        tokenizer.state = AFTER_DOCTYPE_PUBLIC_KEYWORD
+        return
+    if tokenizer.matchCaseInsensitive("SYSTEM"):
+        consume 6 characters
+        tokenizer.state = AFTER_DOCTYPE_SYSTEM_KEYWORD
+        return
+
+    reportParseError("invalid-character-sequence-after-doctype-name")
+    tokenizer.currentToken.forceQuirks = true
+    tokenizer.state = BOGUS_DOCTYPE</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize CDATA sections (Module 15)</li>
+      <li>Decide what quirks mode actually CHANGES about rendering — that's a tree-construction/CSS concern entirely outside this course's tokenizer scope</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize every real-world DOCTYPE shape, from bare <code>html</code> to full legacy <code>PUBLIC</code>+<code>SYSTEM</code> declarations</li>
+      <li>Correctly set (or withhold) the force-quirks flag according to sixteen states' worth of exact rules</li>
+      <li>Correctly distinguish "missing" from "empty string" for identifiers, exercising Module 1's oldest still-active design decision</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/14-doctype/js
+node --test</code></pre>
+<pre><code># tests 14
+# pass 14
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/14-doctype/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 14: DOCTYPE States -- Java
+  PASS - PUBLIC with only a public identifier leaves systemIdentifier missing (null)
+  PASS - trailing garbage after a complete system identifier does not force quirks
+  PASS - EOF mid-doctype emits a force-quirks doctype token AND an EOF token
+  ... (10 more)
+13 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my PUBLIC-only doctype has forceQuirks=true"</strong> — a
+missing system identifier when only PUBLIC was specified is NOT an error;
+double-check you're not accidentally forcing quirks just because
+<code>systemIdentifier</code> stayed <code>null</code>.<br>
+<strong>"case-insensitive PUBLIC/SYSTEM matching consumes the wrong
+characters"</strong> — check <code>afterDoctypeNameState</code> actually
+backs up <code>pos</code> by one BEFORE calling
+<code>matchCaseInsensitive</code>, since it already consumed one character
+to rule out the simple cases first.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this module treats "no
+system identifier when only PUBLIC was given" as completely normal, but
+treats "no public identifier at all when PUBLIC was written" (i.e.
+<code>PUBLIC</code> immediately followed by something that isn't a quote)
+as a force-quirks error. Both cases involve a "missing" identifier — why
+does one get to just be <code>null</code>, and the other forces quirks?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because the two situations tell you completely different things about
+authorial intent. Writing <code>PUBLIC "..."</code> with nothing after is
+a deliberate, common, historically valid choice — the author explicitly
+invoked the <code>PUBLIC</code> form and gave exactly what it requires
+(a public identifier), then stopped; there was never a promise of a system
+identifier to begin with. Writing <code>PUBLIC</code> followed by
+something that isn't a quote at all means the author invoked a keyword
+that specifically REQUIRES an identifier to immediately follow, and then
+didn't supply one — that's not "choosing not to include an optional
+piece," it's "starting a required piece and failing to finish it." The
+force-quirks flag consistently tracks the second kind of failure, not the
+first.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: In practice, do modern web pages even use PUBLIC/SYSTEM doctypes anymore?</div>
+    <div class="a">A: Almost never by choice — the modern, universally recommended doctype is the bare <code>&lt;!DOCTYPE html&gt;</code> this module's simplest test covers. The PUBLIC/SYSTEM machinery exists for backward compatibility with HTML 4.01 and XHTML-era documents, which is exactly why a tokenizer built today still needs to handle it correctly: old documents don't stop existing just because authoring conventions moved on.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why does Bogus DOCTYPE state have no data field, when Bogus Comment (Module 12) does?</div>
+    <div class="a">A: Because a bogus comment's entire purpose is preserving arbitrary salvaged text as the comment's content — that's the whole point of a comment. A doctype's meaningful content is its name and identifiers, which by the time BOGUS_DOCTYPE is reached, are already either correctly captured or correctly marked missing; whatever garbage follows before &gt; genuinely has nowhere useful to go, so the spec just discards it.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Does this course's tokenizer decide whether a document renders in quirks mode?</div>
+    <div class="a">A: No — this tokenizer only ever sets the <code>forceQuirks</code> FLAG on the token; deciding what quirks mode actually means for rendering (looser CSS box-model rules, different table layout algorithms, etc.) happens in tree construction and the rendering engine, both outside this course's Track 1 scope. This is the same tokenizer/tree-construction boundary Module 9 first drew for RCDATA switching, showing up again here for a completely different feature.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 15 is the last of the individual state modules: CDATA section
+state, the foreign-content (SVG/MathML) escape hatch this course's
+tokenizer reaches unconditionally, since — like RCDATA switching and
+force-quirks rendering — knowing <em>when</em> CDATA is actually valid is
+a tree-construction concern this course's Track 1 doesn't implement.</p>
+
+<div class="module-nav">
+  <a href="../13-comments/tutorial.html">← Module 13: Comment States</a>
+  <a href="../15-cdata/tutorial.html">Module 15: CDATA Section State →</a>
+</div>
+
+</main>
+</body>
+</html>
