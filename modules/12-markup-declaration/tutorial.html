@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 12: Markup Declaration Open & Bogus Comment</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#4ade80;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 5: Comments &amp; Markup Declarations · Module 12 of 16</span>Markup Declaration Open &amp; Bogus Comment</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../09-tag-open/tutorial.html">Module 9: Tag Open / End Tag Open / Tag Name</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A bouncer checking three specific badges, then a lost-and-found bin for everything else</div>
+<p>Right after the door marked <code>&lt;!</code>, a bouncer checks
+exactly three things, in order, without ever guessing: "does this start
+with two dashes? Does it spell DOCTYPE, in any mix of capitals? Does it
+spell <code>[CDATA[</code> exactly?" Match one, and you're waved through
+to that specific room. Match none, and — rather than turning you away —
+the bouncer shrugs and drops you in a lost-and-found bin (a "bogus
+comment"): everything about you gets written down as-is, right up until
+someone closes the bin's lid with a <code>&gt;</code>. Nothing is ever
+rejected outright; unrecognized input always ends up <em>somewhere</em>
+real.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 9's <code>&lt;!</code> handoff arrives here with nothing yet
+  consumed past the <code>!</code>.</li>
+  <li>Check, without consuming: do the next two characters spell
+  <code>--</code>? If so, consume them, start a real comment token, and
+  head into Module 13.</li>
+  <li>Otherwise check: do the next seven characters spell
+  <code>DOCTYPE</code>, in any mix of upper/lowercase? If so, consume
+  them and head into Module 14.</li>
+  <li>Otherwise check: do the next seven characters spell
+  <code>[CDATA[</code>, exact case? If so, consume them and head into
+  Module 15.</li>
+  <li>None of the three matched: report a parse error, start a comment
+  token, and fall into Bogus Comment — consuming nothing extra, so
+  whatever didn't match is still sitting there, about to become the
+  comment's first characters.</li>
+  <li>Bogus Comment just accumulates characters into that comment's data
+  until <code>&gt;</code> (or EOF) ends it — no further structure, no
+  further checks.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input after <code>&lt;!</code></th><th>Routes to</th></tr>
+<tr><td><code>--comment--&gt;</code></td><td>Module 13 (real comment)</td></tr>
+<tr><td><code>DOCTYPE html&gt;</code> / <code>doctype</code> / <code>DocType</code></td><td>Module 14 (any case)</td></tr>
+<tr><td><code>[CDATA[x]]&gt;</code></td><td>Module 15</td></tr>
+<tr><td><code>weird&gt;</code></td><td>Bogus comment, data = <code>"weird"</code></td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function MARKUP_DECLARATION_OPEN_STATE(tokenizer):
+    if tokenizer.matchLiteral("--"):
+        consume 2 characters
+        tokenizer.currentToken = new CommentToken()
+        tokenizer.state = COMMENT_START
+        return
+    if tokenizer.matchCaseInsensitive("DOCTYPE"):
+        consume 7 characters
+        tokenizer.state = DOCTYPE
+        return
+    if tokenizer.matchLiteral("[CDATA["):
+        consume 7 characters
+        tokenizer.state = CDATA_SECTION
+        return
+    reportParseError("incorrectly-opened-comment")
+    tokenizer.currentToken = new CommentToken()
+    tokenizer.state = BOGUS_COMMENT   // nothing consumed -- reconsume implicit</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Tokenize a real comment's actual content — Module 13's job, this module only opens the door</li>
+      <li>Tokenize a real DOCTYPE's structure — Module 14</li>
+      <li>Tokenize real CDATA content — Module 15</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly route all three recognized markup declarations to their real destinations</li>
+      <li>Correctly fall back to a bogus comment for anything else, with zero characters lost</li>
+      <li>Correctly close a bogus comment from three different, independently-verified entry points</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/12-markup-declaration/js
+node --test</code></pre>
+<pre><code># tests 12
+# pass 12
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/12-markup-declaration/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 12: Markup Declaration Open & Bogus Comment -- Java
+  PASS - <!DOCTYPE hands off to Module 14, case-insensitively
+  PASS - <? routes through Tag Open (Module 9) into a bogus comment here
+  PASS - EOF inside a bogus comment emits BOTH the comment and an EOF token
+  ... (8 more)
+11 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my &lt;?xml?&gt; test expects the wrong comment data"</strong> —
+this bit us during this module's own construction: the leading
+<code>?</code> IS part of the bogus comment's data (Module 9 reconsumes
+it, doesn't discard it). If your expected value is missing the leading
+<code>?</code>, that's the bug — see DECISIONS.md's "What We Proved" for
+exactly how this was caught.<br>
+<strong>"DOCTYPE matches only in one case"</strong> — check you're using
+a genuinely case-insensitive comparison (lowercase both sides before
+comparing), not a literal string match.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this module's own test
+suite caught a real error in the assumption carried over from Module 9
+(that the <code>?</code> gets discarded, when it's actually reconsumed).
+Module 9 was built and fully tested, with all its tests passing, several
+modules before this mistake was caught. How could a wrong assumption
+survive an entire module's worth of passing tests undetected?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because Module 9's own tests never needed to know or check <em>what</em>
+the reconsumed character eventually becomes — they only needed to confirm
+that <code>&lt;?</code> correctly switches to <code>BOGUS_COMMENT</code>
+and reports a parse error, both of which were true regardless of whether
+the <code>?</code> was reconsumed or discarded (since
+<code>BOGUS_COMMENT</code> wasn't built yet, either choice produced the
+identical observable result at the time: a <code>NotImplementedError</code>
+pointing at Module 12). The detail only became <em>observable</em> once
+Module 12 actually built the state that consumes that reconsumed
+character. This is a real, general lesson: a seam can be correctly wired
+and fully tested while still hiding an untested assumption about what
+happens once the room behind it is finally built — which is exactly why
+this course insists on tracing full round trips, not just isolated seams,
+as each new module comes online.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does &lt;?xml version="1.0"?&gt; (a real, valid XML processing instruction) get turned into an HTML comment instead of being recognized properly?</div>
+    <div class="a">A: Because HTML's tokenizer isn't an XML tokenizer, and processing instructions were never part of HTML's own grammar — a "?" right after "&lt;" was never valid HTML tag syntax to begin with. The spec's answer to "what should happen with syntax that was never valid" is consistently "don't reject it outright, fold it into the nearest sensible bucket" — here, that bucket is a comment, since a comment's job (hold arbitrary text, don't parse it as markup) is the closest fit.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why is "--" case-sensitive when "DOCTYPE" isn't?</div>
+    <div class="a">A: Dashes have no case to be insensitive about — "case-insensitive" only has meaning for letters. The real distinction isn't "some declarations get special leniency and others don't"; it's that DOCTYPE, as a keyword written by human authors for decades before HTML5 formalized its rules, needed to tolerate whatever capitalization convention any given era or author preferred, while "--" as a two-character comment-opening punctuation mark never had multiple "spellings" to begin with.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Does a bogus comment ever get treated differently from a "real" comment once tokenizing is done?</div>
+    <div class="a">A: Not by the tokenizer — both are indistinguishable `CommentToken`s in the output stream by the time this module is done with them. Any distinction between "this was a well-formed HTML comment" and "this was salvaged from malformed input" exists only in the tokenizer's parse-error log, not in the token itself.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 13 builds the real comment states this module only opened the
+door to: <code>COMMENT_START</code> through <code>COMMENT_END_BANG</code>
+— the actual dash-counting logic that decides when <code>--&gt;</code>,
+or the trickier <code>--!&gt;</code>, really closes a comment.</p>
+
+<div class="module-nav">
+  <a href="../11-attr-char-ref/tutorial.html">← Module 11: Character Reference in Attribute Value</a>
+  <a href="../13-comments/tutorial.html">Module 13: Comment States →</a>
+</div>
+
+</main>
+</body>
+</html>
