@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 10: Attribute Name & Value States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#fb7185;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 4: Tags &amp; Attributes · Module 10 of 16</span>Attribute Name &amp; Value States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../09-tag-open/tutorial.html">Module 9: Tag Open / End Tag Open / Tag Name</a>
+  <a class="tag-link" href="../01-skeleton/tutorial.html">Module 1: Token Types &amp; Machine Skeleton</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A form with a "no duplicate fields" rule, enforced at submission time</div>
+<p>Picture filling out a paper form where you can write as many
+label-and-answer pairs as you want in the margin — "color: blue," "size:
+large," and so on. But there's a clerk standing over your shoulder who, the
+<em>instant</em> you finish writing a label (before you've even started the
+answer), checks it against every label you've already written. Write
+"color" a second time, and the clerk stops you right there: "already have
+one of those — this one doesn't count," circles it as a note-to-self, and
+lets you keep writing the answer anyway, just so nothing jams. Only your
+very first "color" ever makes it onto the official form.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>After a tag name, whitespace or almost anything else means an
+  attribute is starting. A scratch <code>{name, value}</code> pair begins
+  building — not yet attached to the tag.</li>
+  <li>Letters accumulate into the scratch name (lowercased as they go,
+  exactly like tag names). The moment a terminator (whitespace,
+  <code>/</code>, <code>=</code>, <code>&gt;</code>, EOF) arrives, the
+  name is <em>finished</em> — and only now does the duplicate check
+  happen, comparing against every attribute already committed to the tag.</li>
+  <li>No duplicate: the scratch pair is pushed onto the tag's real
+  attribute list. Duplicate: a parse error is reported, and the pair is
+  quietly dropped — never attached.</li>
+  <li>An <code>=</code> after the name means a value is coming: skip
+  whitespace, then look for a quote character (or, absent one, start
+  reading an unquoted value immediately).</li>
+  <li>Characters accumulate into the (already-committed-or-dropped)
+  pair's <code>value</code> field, one at a time, until the closing quote
+  (or, for unquoted, whitespace/<code>&gt;</code>) ends it.</li>
+  <li><code>&gt;</code>, from almost any of these states, emits the tag
+  and returns to Data — unconditionally, no appropriateness check needed.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input</th><th>Resulting attributes</th><th>Parse error?</th></tr>
+<tr><td><code>&lt;div class="x"&gt;</code></td><td><code>[{class: "x"}]</code></td><td>no</td></tr>
+<tr><td><code>&lt;div disabled&gt;</code></td><td><code>[{disabled: ""}]</code></td><td>no</td></tr>
+<tr><td><code>&lt;div a="1" a="2"&gt;</code></td><td><code>[{a: "1"}]</code> — second dropped</td><td>yes — duplicate-attribute</td></tr>
+<tr><td><code>&lt;div a="1"b="2"&gt;</code></td><td><code>[{a: "1"}, {b: "2"}]</code> — both kept</td><td>yes — missing-whitespace-between-attributes</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function FINISH_ATTRIBUTE_NAME(tokenizer, nextState):
+    isDuplicate = tokenizer.currentToken.attributes.any(a => a.name == tokenizer.currentAttribute.name)
+    if isDuplicate:
+        reportParseError("duplicate-attribute")
+        // NOT pushed -- silently dropped, parsing continues
+    else:
+        tokenizer.currentToken.attributes.push(tokenizer.currentAttribute)
+    tokenizer.state = nextState
+
+function ATTRIBUTE_NAME_STATE(tokenizer):
+    c = tokenizer.consume()
+    if c in {TAB, LF, FF, SPACE}: FINISH_ATTRIBUTE_NAME(tokenizer, AFTER_ATTRIBUTE_NAME); return
+    if c in {'/', '&gt;'} or c == EOF:
+        FINISH_ATTRIBUTE_NAME(tokenizer, AFTER_ATTRIBUTE_NAME)
+        reconsume c there (no-op if EOF)
+        return
+    if c == '=': FINISH_ATTRIBUTE_NAME(tokenizer, BEFORE_ATTRIBUTE_VALUE); return
+    // uppercase -> lowercase, NUL -> U+FFFD, else -> append as-is
+    tokenizer.currentAttribute.name += normalize(c)</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Decode a character reference inside an attribute value (<code>&amp;amp;</code> stays literal for now — Module 11)</li>
+      <li>Handle the "ambiguous ampersand" legacy exception specific to attribute context (Module 11)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize any real tag with any number of attributes, in any quoting style</li>
+      <li>Correctly enforce the duplicate-attribute rule with real, verified evidence</li>
+      <li>Correctly recover from five distinct kinds of malformed attribute syntax</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/10-attributes/js
+node --test</code></pre>
+<pre><code># tests 18
+# pass 18
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/10-attributes/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 10: Attribute Name & Value States -- Java
+  PASS - a duplicate attribute name is dropped -- first occurrence wins
+  PASS - missing whitespace between attributes is a parse error but still parses both
+  PASS - an & inside a quoted attribute value hands off to Module 11
+  ... (14 more)
+17 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my duplicate attribute keeps the SECOND value, not the first"</strong>
+— check <code>finishAttributeName</code>/its Java equivalent is comparing
+against attributes already pushed BEFORE pushing the new one, and skipping
+the push entirely on a match — not overwriting an existing entry.<br>
+<strong>"boolean attributes show value: undefined/null instead of empty
+string"</strong> — <code>currentAttribute</code> must be initialized with
+<code>value: ''</code> / <code>""</code> up front, not left unset until a
+value state actually runs.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the duplicate check
+compares the new attribute's name only against attributes <em>already on
+the tag</em> — not against every attribute name seen so far in the whole
+document, and not against attribute names on other tags. Why does the
+comparison need to be scoped to "this one tag" specifically, and what
+would go wrong if it weren't?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because the rule is about a single element having two conflicting
+values for the same attribute at once — "duplicate" only means anything
+within the boundary of one tag's own attribute set. If the check compared
+against every attribute name ever seen in the whole document, then
+writing <code>class</code> on a second, completely unrelated
+<code>&lt;div&gt;</code> later in the page would incorrectly get flagged
+and dropped — which would make attributes essentially unusable past the
+first tag that used any given name. The fix in this module's code is
+almost invisible: <code>currentToken.attributes</code> only ever holds the
+attributes of the tag <em>currently</em> being built, and gets replaced
+with a fresh empty list every time a new <code>StartTagToken</code>/<code>EndTagToken</code>
+is constructed (Module 9). Getting the *scope* of a check right is often
+as important as getting the check's logic right.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why is the duplicate check done at "finish the name" time, instead of just checking once right before the whole tag is emitted?</div>
+    <div class="a">A: Doing it earlier means the discarded duplicate's VALUE never has to be specially discarded later — since the pair was never pushed onto the real attribute list in the first place, its value characters get written into an object that's already known to be headed for the void, with no extra bookkeeping needed to "remove" anything at emit time. Checking earlier turns a two-step process (detect-then-remove) into a one-step process (detect-then-never-add).</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: In &lt;div a="1" a="2"&gt;, does the tokenizer at least warn that "a" was skipped a second time via its value, "2"?</div>
+    <div class="a">A: The parse error is reported once, at the moment the duplicate NAME is detected — the value "2" that follows is still tokenized character-by-character (into the orphaned, discarded attribute object) but produces no separate error of its own; the spec doesn't consider each subsequent character of a doomed attribute's value independently newsworthy once the name itself already triggered the one relevant parse error.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: This module handles three different quoting styles with three different states. Why not just one state that "looks for whatever character it started with"?</div>
+    <div class="a">A: That's actually very close to what happens: `attributeValueQuotedState` (Module 10's own JS/Java code) IS one shared method parametrized by which quote character closes it, called by two one-line wrappers for double- and single-quoted. The unquoted state genuinely needs to be separate, though, since its termination condition (whitespace or `&gt;`, not a matching quote) and its NUL/`&` handling interact differently with what "the end of the value" even means.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 11 finally implements <code>CHARACTER_REFERENCE_IN_ATTRIBUTE_VALUE</code>
+— reusing Module 4's shared algorithm again, but this time with a real,
+spec-mandated difference from Data state's behavior: the "ambiguous
+ampersand" exception, where a legacy no-semicolon named reference is
+deliberately <em>not</em> decoded if what follows looks like it might be
+part of a URL query string.</p>
+
+<div class="module-nav">
+  <a href="../09-tag-open/tutorial.html">← Module 9: Tag Open / End Tag Open / Tag Name</a>
+  <a href="../11-attr-char-ref/tutorial.html">Module 11: Character Reference in Attribute Value →</a>
+</div>
+
+</main>
+</body>
+</html>
