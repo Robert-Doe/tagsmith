@@ -1,0 +1,20 @@
+# JetBrains IDE
+.idea/
+
+# Java
+*.class
+*.jar
+target/
+out/
+build/
+
+# Node / JS
+node_modules/
+npm-debug.log*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prerequisites — Browser Tokenization Course</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>:root{--accent:#38bdf8;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Foundations — read once, use everywhere</span>Prerequisites</h1>
+
+<p>Every module in this course assumes you already have four small mental
+tools in your pocket. None of them are specific to HTML, or to browsers, or
+to tokenizers — they're general programming primitives that the HTML5
+tokenization spec just happens to lean on constantly. Read these four pages
+once, now. From here on, every tutorial will just <em>link back</em> to the
+specific idea it needs (a little pill-shaped tag like
+<span class="tag-link" style="pointer-events:none;">Reconsume</span>) instead
+of re-explaining it.</p>
+
+<div class="tile-grid">
+  <a class="tile" href="prerequisites/finite-state-machines.html">
+    <span class="tile-title">Finite State Machines</span>
+    <span class="tile-desc">What a "state" even is, and why a tokenizer is just a board game with 68 rooms.</span>
+  </a>
+  <a class="tile" href="prerequisites/input-streams-iterators.html">
+    <span class="tile-title">Input Streams &amp; Iterators</span>
+    <span class="tile-desc">Reading one character at a time through a moving window, and how you know when you've run out.</span>
+  </a>
+  <a class="tile" href="prerequisites/lookahead-reconsume.html">
+    <span class="tile-title">Lookahead &amp; Reconsume</span>
+    <span class="tile-desc">The spec's favorite move: "put that character back and look at it again, but under different rules."</span>
+  </a>
+  <a class="tile" href="prerequisites/unicode-codepoints-vs-utf16.html">
+    <span class="tile-title">Code Points vs. UTF-16 Code Units</span>
+    <span class="tile-desc">Why a "character" in the spec and a "character" in your JS string aren't always the same thing.</span>
+  </a>
+</div>
+
+<h2>How to use this page</h2>
+<ul>
+  <li>Read all four now, in any order — they're short on purpose.</li>
+  <li>When a module tutorial says <span class="tag-link" style="pointer-events:none;">Reconsume</span> in its "00 Prerequisites" section, that's a promise: it will use that idea and won't stop to re-teach it.</li>
+  <li>If a sentence in a module ever assumes something not covered here, that's a bug in the course — not something you're supposed to already know.</li>
+</ul>
+
+<div class="module-nav">
+  <span class="disabled">&nbsp;</span>
+  <a href="modules/01-skeleton/tutorial.html">Module 1: Token Types &amp; Machine Skeleton →</a>
+</div>
+
+</main>
+</body>
+</html>
