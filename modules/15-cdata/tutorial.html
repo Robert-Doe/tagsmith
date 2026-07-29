@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 15: CDATA Section State</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#f87171;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 7: Foreign Content &amp; Capstone · Module 15 of 16</span>CDATA Section State</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../12-markup-declaration/tutorial.html">Module 12: Markup Declaration Open &amp; Bogus Comment</a>
+  <a class="tag-link" href="../03-data-state/tutorial.html">Module 3: Data State</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A "read literally, don't translate" stamp on a passage</div>
+<p>Imagine a translator working through a document who occasionally hits a
+passage stamped "QUOTE VERBATIM — DO NOT INTERPRET." While inside that
+stamped section, they copy every character exactly as written, symbol for
+symbol, no matter how foreign-looking or markup-like it appears — until
+they spot the specific closing mark that ends the stamp's effect. One lone
+character that merely resembles the closing mark doesn't end anything; only
+the complete, exact three-character sequence does.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 12 already consumed <code>[CDATA[</code>. Everything from
+  here is literal content until proven otherwise.</li>
+  <li>At every position, check: do the next three characters spell
+  <code>]]&gt;</code> exactly? If so, consume all three and return to Data
+  state — the section is over.</li>
+  <li>If not, consume and emit just the current character as an ordinary
+  <code>CharacterToken</code>, then check again at the new position.</li>
+  <li>NUL is a parse error but still emitted literally, and EOF is a
+  parse error too, but still emits everything collected plus a final EOF
+  token — both handled exactly like Data state.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input</th><th>Result</th></tr>
+<tr><td><code>&lt;![CDATA[hello]]&gt;rest</code></td><td>"hello" as characters, then "rest" in plain Data</td></tr>
+<tr><td><code>&lt;![CDATA[]]&gt;rest</code></td><td>nothing from CDATA, then "rest"</td></tr>
+<tr><td>(forced) <code>a]b]]&gt;c</code></td><td>"a]bc" — the lone <code>]</code> stays literal</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function CDATA_SECTION_STATE(tokenizer):
+    if tokenizer.matchLiteral("]]&gt;"):
+        consume 3 characters
+        tokenizer.state = DATA
+        return
+    if tokenizer.atEOF():
+        reportParseError("eof-in-cdata")
+        emit EOFToken
+        halt
+        return
+    c = tokenizer.consume()
+    if c is NUL: reportParseError("unexpected-null-character")  // still emitted
+    emit CharacterToken(c)</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Everything — this is the last of the sixteen individual-state modules. Module 16 wires all of them together and verifies the whole thing against a real reference tokenizer.</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize a complete, real CDATA section end to end</li>
+      <li>Correctly reject partial close-sequence matches, verified with a deliberately broken version and a specific counter-example input</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/15-cdata/js
+node --test</code></pre>
+<pre><code># tests 7
+# pass 7
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/15-cdata/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 15: CDATA Section State -- Java
+  PASS - a ] not followed by ]> is just literal content
+  PASS - EOF mid-CDATA-section is a parse error, and still emits an EOF token
+  ... (4 more)
+6 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my close-sequence check only looks at 2 characters"</strong> —
+this is the exact bug this module's own DECISIONS.md deliberately
+introduces and catches; double-check <code>matchLiteral</code> is called
+with all three characters, <code>"]]&gt;"</code>, not two.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this module's own
+walkthrough found that weakening the close-check from three characters to
+two didn't break a single existing test — every test's <code>]]</code>
+happened to be followed by a real <code>&gt;</code> anyway. It took a
+specifically constructed input, <code>]]x]]&gt;rest</code>, to expose the
+bug. What made that specific input the right one to reach for, instead of
+just trying random strings?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>Because exposing this exact bug requires an input where the WEAKENED
+check matches (two brackets present) at a position where the FULL,
+correct check would NOT match (the third character isn't really
+<code>&gt;</code>) — that's the precise condition under which the buggy
+code's blind third <code>consume()</code> swallows the wrong character.
+<code>]]x]]&gt;rest</code> was built by construction, not by guessing:
+two brackets, then a character that definitely isn't <code>&gt;</code>,
+then a real close later so the section still eventually ends normally.
+This is a general debugging skill this course has now demonstrated
+several times (Modules 7, 8, 12, 13, and 14 each did some version of it):
+when you suspect a check is too loose, don't just retest existing cases —
+construct the minimal input that makes the loose version and the strict
+version disagree, on purpose.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: The tutorial keeps saying "foreign content" for CDATA — what does that actually mean?</div>
+    <div class="a">A: It refers to SVG and MathML content embedded inside an HTML document — two other markup languages that DO use CDATA sections in their native form, unlike ordinary HTML. A real browser only treats <code>&lt;![CDATA[</code> this way when the tokenizer is currently inside one of those embedded regions; outside of them, real browsers treat it as a bogus comment instead (Module 12's fallback). This course's tokenizer takes the CDATA path unconditionally, because knowing "am I inside SVG/MathML right now" is tree-construction context this course's Track 1 doesn't track — documented explicitly in Module 12's DECISIONS.md as the same kind of limitation Module 9 first identified for RCDATA switching.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is CDATA content able to contain character references, like attribute values or Data state can?</div>
+    <div class="a">A: No — CDATA is specifically "read literally, don't interpret anything," which is the whole reason it exists as a distinct mechanism. If `&amp;` appeared inside a real CDATA section, it would come through as four literal characters (`&`, `a`, `m`, `p`) plus a semicolon, never decoded to `&`.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Phase 7 concludes with Module 16: wiring every one of these 68 states
+into one single, complete tokenizer, and verifying it against real-world
+HTML by diffing its output against the host environment's own
+<code>DOMParser</code> — the capstone that finally proves all sixteen
+modules compose into one correct whole, not just sixteen independently
+correct pieces.</p>
+
+<div class="module-nav">
+  <a href="../14-doctype/tutorial.html">← Module 14: DOCTYPE States</a>
+  <a href="../16-integration/tutorial.html">Module 16: Full Integration &amp; Differential Testing →</a>
+</div>
+
+</main>
+</body>
+</html>
