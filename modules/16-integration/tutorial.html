@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 16: Full Integration & Differential Testing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #38bdf8; }
+  .verdict { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+  .verdict .card { flex: 1; min-width: 220px; border-radius: 10px; padding: 1rem 1.2rem; border: 1px solid var(--border); }
+  .verdict .card.match { border-top: 4px solid var(--good); }
+  .verdict .card.diverge { border-top: 4px solid var(--warn); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 7: Foreign Content &amp; Capstone · Module 16 of 16</span>Full Integration &amp; Differential Testing</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../01-skeleton/tutorial.html">Module 1: Token Types &amp; Machine Skeleton</a>
+  <a class="tag-link" href="../09-tag-open/tutorial.html">Module 9: Tag Open / End Tag Open / Tag Name</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">This module assumes all fifteen preceding modules — it's the one place in the whole course where that's genuinely true of every single one.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The building inspector's final walkthrough</div>
+<p>Module 1 was an elevator with 68 buttons, mostly locked, one door
+working. Fifteen modules later, every button is wired. This module is the
+inspector's final walkthrough: press every single button, confirm every
+floor actually opens (not just that the panel stopped announcing "floor
+not installed yet"). Then — because a building inspector's word alone
+isn't worth much — invite a second, independent inspector who's never
+seen these blueprints: a real, live web browser. Hand them the same
+building and see if they report the same floors in the same order.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Force every one of the 68 states directly, one at a time, and
+  confirm none of them still throws the "not implemented" error Module 1
+  built as a tripwire fifteen modules ago.</li>
+  <li>Run a complete, realistic HTML document — doctype, comment, nested
+  tags, attributes, entities in two different contexts, a self-closing
+  tag — through the whole tokenizer in one continuous pass, starting from
+  plain Data state, and check the exact resulting token sequence.</li>
+  <li>Take that exact same document and hand it to a real browser's
+  <code>DOMParser</code>, live. Compare tag sequence, attribute values,
+  and decoded text, dimension by dimension.</li>
+  <li>Deliberately construct a case this course has predicted a pure
+  tokenizer <em>cannot</em> handle correctly — a <code>&lt;script&gt;</code>
+  tag containing ordinary JavaScript with a <code>&lt;</code> comparison —
+  and check it against the same real browser too, to see the predicted
+  divergence actually happen, not just describe it.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Two real, live differential tests against an actual browser, run during this course's construction:</p>
+<div class="verdict">
+  <div class="card match">
+    <strong>Realistic page</strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim);">doctype, comment, tags, attributes, entities</span><br><br>
+    Tag sequence, attributes, decoded text, doctype name — <strong>exact match</strong>, every dimension.
+  </div>
+  <div class="card diverge">
+    <strong>Script containing <code>a&lt;b</code></strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim);">ordinary, valid JavaScript</span><br><br>
+    Real browser: 4 elements, script body preserved as text.<br>
+    This tokenizer alone: a phantom <code>&lt;b)&gt;</code> tag, real <code>&lt;/script&gt;</code> never reached.<br>
+    <strong>Predicted divergence, confirmed real.</strong>
+  </div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function VERIFY_COMPLETENESS(tokenizer_class):
+    for each state in ALL_68_STATES:
+        t = new tokenizer_class("x")
+        t.state = state
+        t.currentToken = <minimal fixture>
+        try:
+            t.step()
+        catch NotImplementedError:
+            FAIL("state still unimplemented: " + state)
+        catch anything_else:
+            pass   // fixture mismatches are expected noise here
+
+function VERIFY_AGAINST_REAL_BROWSER(html, tokenizer_output):
+    real_result = browser.DOMParser.parseFromString(html)
+    compare(tokenizer_output.tagSequence, real_result.tagSequence)
+    compare(tokenizer_output.attributes, real_result.attributes)
+    compare(tokenizer_output.decodedText, real_result.decodedText)</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Make <code>&lt;script&gt;</code>/<code>&lt;textarea&gt;</code>/etc. content tokenize correctly from real markup — that's Track 2, Module A1, not this module</li>
+      <li>Build anything beyond a tokenizer — no tree, no DOM, no rendering</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Prove, individually, that all 68 states are genuinely wired and working</li>
+      <li>Prove a complete realistic document tokenizes correctly end to end, with zero parse errors</li>
+      <li>Prove — not just claim — that this tokenizer matches a real browser on well-formed input, and diverges exactly where fifteen modules of theory predicted it would</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/16-integration/js
+node --test</code></pre>
+<pre><code># tests 9
+# pass 9
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/16-integration/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 16: Full Integration & Differential Testing -- Java
+  PASS - every one of the 68 states is dispatchable -- none still throws NotImplementedException
+  PASS - the realistic page produces the exact expected structural token sequence
+  PASS - without tree construction, ordinary JS containing "<" corrupts the rest of tokenizing
+  ... (5 more)
+8 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my completeness check fails for a state I thought was
+finished"</strong> — check the dispatch chain in <code>step()</code>
+actually has an <code>if</code> branch for it, and that the branch calls
+the right method name (a typo'd method name is a silent no-op in some
+languages, a compile error in others — see this module's own
+DECISIONS.md for a real example of this exact class of mistake, caught by
+running the code).<br>
+<strong>"my Java test run stops partway with no summary line"</strong> —
+this is a real, documented behavior, not a bug in your code necessarily:
+an uncaught exception anywhere in <code>TokenizerTest.main()</code>
+terminates the whole run before <code>Check.summary()</code> executes,
+unlike JS's <code>node:test</code>, which isolates each test. See
+DECISIONS.md.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this module found that
+JavaScript's test runner isolates failures (one broken test doesn't stop
+others from running) while this course's hand-rolled Java test harness
+does not (one uncaught exception kills the whole run). Given that
+difference, which harness's "all tests passed" claim should you trust
+<em>more</em> — and why might the answer be less obvious than it first
+seems?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>It's genuinely not simply "JS's is better." JS's isolation means a
+green run tells you specifically "every test that ran, passed" — but it
+can never tell you a test was silently skipped due to a setup problem
+elsewhere, since each test is independent by construction. Java's
+lack of isolation is a real weakness for *diagnosing* failures (you lose
+information about everything after the crash) — but a Java run that
+reaches <code>Check.summary()</code> and prints "N passed, 0 failed" is
+actually a slightly *stronger* end-to-end guarantee in one specific way:
+it proves the entire file executed top to bottom without a single
+uncaught exception anywhere, not just that each isolated test block
+individually survived. Different tools, different guarantees — the right
+lesson isn't "pick a favorite," it's knowing exactly what a green run
+from each one is, and isn't, telling you.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: If this tokenizer diverges from a real browser on &lt;script&gt; content, doesn't that mean it's "wrong"?</div>
+    <div class="a">A: Not wrong — incomplete, in a specifically scoped, deliberately documented way. This course's Track 1 explicitly builds a standalone tokenizer, and the spec itself defines script-data-mode switching as tree construction's responsibility, not the tokenizer's. A pure tokenizer that DID special-case "script" internally would actually be less spec-faithful, not more — it would be quietly reimplementing tree-construction logic inside a layer that isn't supposed to have it.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why compare against a live browser at all, instead of just trusting fifteen modules of individually-passing tests?</div>
+    <div class="a">A: Because individually-correct pieces composing into a correct whole is exactly the kind of claim that deserves independent verification, not just internal self-consistency — every module's tests were written by the same process that wrote the implementation, so they share any misunderstanding of the spec that process might have had. A real browser has no such shared blind spot; agreement with it is evidence from a genuinely independent source.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Now that Track 1 is complete, what's actually missing to make this a "real" HTML parser?</div>
+    <div class="a">A: Tree construction (turning the token stream into a DOM tree, including the state-switching feedback loop Module 9 identified), then everything downstream of that — CSS, layout, rendering. This course's Track 2 builds a deliberately minimal version of just the first piece, specifically to prove the tokenizer/tree-construction boundary this whole course has been pointing at since Module 9, not to build a production parser.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Track 1 is complete: all 68 states, verified individually, verified
+together, verified against a real browser. Track 2 begins with Module A1
+— a deliberately minimal tree constructor, just enough to finally replace
+every "force the state directly" test this course has relied on since
+Module 5 with something that happens automatically, the way a real browser
+does it.</p>
+
+<div class="module-nav">
+  <a href="../15-cdata/tutorial.html">← Module 15: CDATA Section State</a>
+  <a href="../a1-tree-construction/tutorial.html">Module A1: Minimal Tree Construction (Track 2) →</a>
+</div>
+
+</main>
+</body>
+</html>
