@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 11: Character Reference in Attribute Value</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>:root{--accent:#fbbf24;}</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 4: Tags &amp; Attributes · Module 11 of 16</span>Character Reference in Attribute Value</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../04-char-ref/tutorial.html">Module 4: Character Reference Consumption</a>
+  <a class="tag-link" href="../10-attributes/tutorial.html">Module 10: Attribute Name &amp; Value States</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The same interpreter, one extra caution — but only on the job site</div>
+<p>Meet the same phrasebook interpreter from Module 4. Off duty, reading a
+novel (Data state), they translate confidently: see "amp" without its
+usual trailing punctuation, and they'll still confidently call it "and,"
+same as always. But put that interpreter on a construction site (an
+attribute value), where "amp" might actually be the start of someone
+reading out a form code like "amp=47" — a real code, not a word — and they
+suddenly get cautious. On the job, if "amp" is immediately followed by an
+equals sign or another letter or digit, they refuse to guess: "that might
+not be the word I think it is — I'll just repeat exactly what I heard,
+untranslated." Off the job site, that same caution never kicks in.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 10 already remembered which attribute-value state to return
+  to, and which quote character (if any) shouldn't be swallowed by a
+  reference attempt.</li>
+  <li>Run Module 4's exact algorithm — named lookup, numeric decode, all
+  of it, completely unchanged.</li>
+  <li>New check, named-reference path only: if the match had no trailing
+  semicolon, peek at the very next character. Is it <code>=</code> or
+  alphanumeric?</li>
+  <li>If yes: undo the entire match, as if it never started. The
+  <code>&amp;</code> and everything after it stay exactly as typed.</li>
+  <li>If no (or if there was a semicolon, or it's a numeric reference):
+  decode normally, exactly like Module 4.</li>
+  <li>Append whichever result you got — decoded text, or a literal
+  <code>&amp;</code> — directly onto the attribute's <code>value</code>
+  string. Nothing here ever becomes a separate character token.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<table>
+<tr><th>Input (inside an attribute)</th><th>Result</th><th>Why</th></tr>
+<tr><td><code>a="x&amp;y"</code></td><td><code>x&amp;y</code> decodes to <code>x&y</code></td><td>has a semicolon — always safe</td></tr>
+<tr><td><code>a="x&amp=y"</code></td><td>stays literal: <code>x&amp=y</code></td><td>no semicolon, followed by <code>=</code> — ambiguous</td></tr>
+<tr><td><code>a="x&amp y"</code></td><td>decodes: <code>x& y</code></td><td>no semicolon, but followed by a space — not ambiguous</td></tr>
+<tr><td>Data state: <code>&amp b</code></td><td>decodes: <code>& b</code></td><td>outside an attribute — this rule never applies at all</td></tr>
+</table>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function CONSUME_NAMED_REFERENCE(tokenizer, isInAttribute):
+    // ... find the longest matching name, exactly like Module 4 ...
+    if match found:
+        hasSemicolon = match.endsWith(';')
+        if not hasSemicolon and isInAttribute:
+            next = characterRightAfterTheMatch
+            if next == '=' or isAlphanumeric(next):
+                tokenizer.pos = positionRightAfterTheAmpersand   // undo everything
+                return NO_MATCH
+        // otherwise: proceed exactly as Module 4 always has
+        commit the match, report missing-semicolon if needed
+        return decoded value
+    return NO_MATCH</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Parse <code>&lt;!DOCTYPE&gt;</code>, comments, or bogus comments (Module 12)</li>
+      <li>Decode any named reference outside this course's ~25-entry documented subset (unchanged scope limit from Module 4)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly decode character references inside any of the three attribute-value quoting styles</li>
+      <li>Correctly apply the ambiguous-ampersand exception, verified in both directions (suppressed vs. not suppressed)</li>
+      <li>Prove, not just claim, that Data state's decoding rules are completely unaffected by this addition</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/11-attr-char-ref/js
+node --test</code></pre>
+<pre><code># tests 11
+# pass 11
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/11-attr-char-ref/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 11: Character Reference in Attribute Value -- Java
+  PASS - a legacy no-semicolon match followed by = is ambiguous -- NOT decoded
+  PASS - a legacy no-semicolon match followed by an alphanumeric is also ambiguous
+  PASS - Data state character reference decoding is unchanged by this module
+  ... (7 more)
+10 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my ambiguous check fires even outside attributes"</strong> —
+double check <code>characterReferenceState</code> (Data/RCDATA, Module 4)
+still passes <code>false</code>/omits the flag for <code>isInAttribute</code>
+— only the three attribute-value states should ever pass <code>true</code>.<br>
+<strong>"a semicolon-terminated reference gets suppressed too"</strong> —
+the ambiguous check should only run when <code>hasSemicolon</code> is
+false; a reference with a real trailing semicolon is never ambiguous,
+regardless of what follows it.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this exception exists "for
+historical reasons," per the spec's own words — protecting old-style
+query strings like <code>href="page.cgi?a=1&amp=2"</code> from being
+wrongly decoded. But modern, correctly-authored HTML almost always writes
+<code>&amp;amp;</code> (with the semicolon) precisely to avoid this
+ambiguity in the first place. Given that, does this exception actually
+matter for HTML written today?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>It matters enormously for HTML a browser <em>receives</em>, even if it
+matters little for HTML a careful author <em>writes</em> today — because a
+browser's tokenizer has to correctly handle every URL and query string
+that was ever generated, by any tool, at any point in the web's history,
+often without semicolons, often auto-generated by server-side code that
+predates modern authoring conventions. This is the same theme Module 7
+surfaced with the script-data escape mechanism: the tokenizer's job isn't
+to reward well-formed input, it's to produce deterministic, spec-defined
+output for <em>any</em> input, including input shaped by decades-old
+conventions nobody would choose to write today. A comprehensive exam
+question along these lines is really testing whether you understand
+<em>why</em> the spec is as detailed as it is, not just whether you can
+recite the rule.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does the ambiguous check only look at ONE character after the match, instead of checking whether the rest of the value looks like a query string?</div>
+    <div class="a">A: Because the tokenizer has no concept of "the rest of the value looks like a query string" — it only ever sees one character at a time, with no lookahead beyond what a specific state explicitly requests. The one-character check is the maximum context the algorithm is built to use anywhere, and it turns out to be sufficient: `=` or an alphanumeric character immediately following is specifically what makes a human (and this rule) suspect "this wasn't meant to be an entity."</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Could this exception ever cause a REAL entity reference to be wrongly left undecoded?</div>
+    <div class="a">A: Only for the legacy no-semicolon spelling specifically — always writing the semicolon (`&amp;amp;`, not `&amp;amp`) sidesteps the ambiguity completely, which is exactly why modern authoring guidance universally recommends the semicolon form. The exception exists to protect a specific historical spelling convention, not to make correctly-written references unreliable.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: This module reused Module 4's function instead of writing a separate one for attributes. Was that the right call, given how different the two behaviors are?</div>
+    <div class="a">A: The behaviors differ by exactly one `if` block inside one sub-function — everything else (numeric decoding, the bail-out terminators, longest-match search) is identical. Duplicating the whole algorithm to isolate one conditional would have meant two places to keep in sync for every future fix, for a much smaller actual difference than it might first appear.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module 12 leaves character content and attributes behind and opens the
+next major branch of the spec: <code>&lt;!</code> markup declarations —
+comments, and the "bogus comment" fallback for anything (like
+<code>&lt;?xml&gt;</code>-style processing instructions) that isn't a
+real comment, a real DOCTYPE, or real CDATA.</p>
+
+<div class="module-nav">
+  <a href="../10-attributes/tutorial.html">← Module 10: Attribute Name &amp; Value States</a>
+  <a href="../12-markup-declaration/tutorial.html">Module 12: Markup Declaration Open &amp; Bogus Comment →</a>
+</div>
+
+</main>
+</body>
+</html>
