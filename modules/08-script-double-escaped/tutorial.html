@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module 8: Script Data Double Escaped States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #e879f9; }
+  .nest { font-family: "JetBrains Mono", monospace; font-size: 0.85rem; line-height: 1.9; }
+  .nest .l1 { color: var(--text-dim); }
+  .nest .l2 { color: var(--accent); margin-left: 1.5rem; }
+  .nest .l3 { color: var(--text); margin-left: 3rem; }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 3: The Script Data Minefield · Module 8 of 16</span>Script Data Double Escaped States</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../07-script-escaped/tutorial.html">Module 7: Script Data Escaped States</a>
+</div>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">A password that's case-sensitive exactly once</div>
+<p>Every door badge in this whole building system has been case-insensitive
+so far — "TEXTAREA" and "textarea" open the same door. But this one
+specific inner door, the one that leads deeper into a comment-within-a-
+comment, has a badge reader that was installed by a different contractor
+and never got the memo: it checks your badge letter-for-letter, exact
+case, no exceptions. Type your badge as "SCRIPT" and this one door simply
+doesn't recognize it as the word "script" at all — not "access denied," but
+genuinely "I don't know what you're asking for," and you get redirected
+back out to the ordinary hallway instead.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Module 7 already emitted <code>&lt;</code> and reconsumed a letter
+  here — we're mid-word, building a candidate name one letter at a time,
+  exactly as typed (not lowercased).</li>
+  <li>Every letter gets appended to the buffer <em>and</em> emitted as a
+  character token immediately — there's no batching or deferring here.</li>
+  <li>The moment a terminator (whitespace, <code>/</code>, <code>&gt;</code>)
+  arrives, check: does the buffer read exactly <code>"script"</code>,
+  case-sensitively?</li>
+  <li>If yes: enter double-escaped mode — a near-twin of single-escaped
+  mode, with one behavioral difference (<code>&lt;</code> is emitted
+  immediately, not deferred).</li>
+  <li>Double-escaped mode watches for its own <code>&lt;/</code> to detect
+  the nested script's real close — which flips into a mirror-image state
+  watching for the buffer to spell <code>"script"</code> again, this time
+  to <em>leave</em> double-escaped mode.</li>
+  <li>From any depth, seeing a real <code>--&gt;</code> always exits all
+  the way back to plain script data in one step — nesting doesn't add
+  extra "levels" you have to unwind one at a time.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Three levels, and where "-->'" sends you from each:</p>
+<div class="nest">
+<div class="l1">SCRIPT_DATA (plain)</div>
+<div class="l2">&lt;!-- ... SCRIPT_DATA_ESCAPED (single) ...</div>
+<div class="l3">&lt;script&gt; ... SCRIPT_DATA_DOUBLE_ESCAPED (double) ... &lt;/script&gt;</div>
+<div class="l2">... back in SCRIPT_DATA_ESCAPED ...</div>
+<div class="l1">--&gt; ALWAYS exits straight back to SCRIPT_DATA, from any of the three levels</div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function SCRIPT_DATA_DOUBLE_ESCAPE_START_STATE(tokenizer):
+    c = tokenizer.consume()
+    if c in {TAB, LF, FF, SPACE, '/', '&gt;'}:
+        if tokenizer.tempBuffer == "script":       // exact, case-sensitive
+            tokenizer.state = SCRIPT_DATA_DOUBLE_ESCAPED
+        else:
+            tokenizer.state = SCRIPT_DATA_ESCAPED
+        emit CharacterToken(c)                     // always emitted, either way
+        return
+    if c is an ASCII letter:
+        tokenizer.tempBuffer += c                  // exact case, NOT lowercased
+        emit CharacterToken(c)
+        return                                      // stay, keep building
+    tokenizer.state = SCRIPT_DATA_ESCAPED
+    reconsume c there                                // (no-op if EOF)</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Enter any of this from real markup — needs Module 9's <code>&lt;script&gt;</code> opening tag</li>
+      <li>Handle a THIRD level of nesting (the spec doesn't define one — this is the deepest the mechanism goes)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Correctly tokenize a real, fully nested hidden-comment script body end to end</li>
+      <li>Correctly apply the case-sensitive "script" check in both directions</li>
+      <li>Correctly exit from any nesting depth straight back to plain script data</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/08-script-double-escaped/js
+node --test</code></pre>
+<pre><code># tests 10
+# pass 10
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/08-script-double-escaped/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>Module 8: Script Data Double Escaped States -- Java
+  PASS - a full nested <script>...</script> inside a hidden comment round-trips completely
+  PASS - lowercase "script" enters double-escaped mode
+  PASS - uppercase "SCRIPT" does NOT enter double-escaped mode
+  ... (6 more)
+9 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my uppercase test doesn't behave differently from lowercase"</strong>
+— you're almost certainly lowercasing (or uppercasing) the buffer somewhere
+before comparing. Search for any <code>.toLowerCase()</code> /
+<code>Character.toLowerCase()</code> call near the temp-buffer append —
+there shouldn't be one in these two states.<br>
+<strong>"nested script never exits back to plain SCRIPT_DATA"</strong> —
+check the dash-dash state's <code>'&gt;'</code> branch targets
+<code>SCRIPT_DATA</code> directly, not <code>SCRIPT_DATA_ESCAPED</code>.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> this course caught the
+case-sensitivity quirk by writing a test that deliberately used uppercase
+input and checking the resulting state. If this course's test suite had
+<em>only</em> ever used lowercase <code>"script"</code> in every test
+(a very natural thing to do by accident, since almost everyone writes
+lowercase HTML), would any test have failed to catch a bug that
+accidentally made the comparison case-insensitive?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>No — and that's exactly the point. A case-insensitive comparison and a
+case-sensitive one produce <em>identical</em> results for every all-
+lowercase input; there is no lowercase-only test that could ever
+distinguish them. This is precisely why this module deliberately verified
+the bug live (see DECISIONS.md and both CODE_WALKTHROUGH.md files): a
+test suite can only prove what it actually exercises, and a quirk this
+specific requires a test specifically shaped to expose it, not just "more"
+tests in general. It's the same lesson Module 7 landed on from the
+opposite direction (a real bug that slipped past a full suite) — here,
+the lesson is what it actually takes to catch one like it on purpose.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why would this case-sensitivity quirk exist at all — was it intentional?</div>
+    <div class="a">A: Most likely a consequence of how this exact mechanism was reverse-engineered from real early-2000s browser behavior rather than designed from scratch — HTML5's tokenization spec was written to formally describe what shipping browsers already did (for compatibility), including their accidental quirks, not to design an idealized new grammar. This is one of several places in this course's spec source where "why is it like this" has a historical rather than a logical answer.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: In practice, does anyone actually write &lt;SCRIPT&gt; in uppercase inside a hidden comment?</div>
+    <div class="a">A: Essentially never on purpose today — but the spec still has to define correct, deterministic behavior for it, because "never happens on purpose" isn't the same guarantee as "never happens," and a tokenizer with undefined behavior for unusual-but-possible input is a security liability, not just a correctness one (Track 2's Module A3 covers this class of concern directly).</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Now that Modules 6, 7, and 8 are all built, is the entire &lt;script&gt; tokenizing story finished?</div>
+    <div class="a">A: The content-handling states are complete — but the opening &lt;script&gt; tag itself (and every other tag in this course, generically) still needs Module 9 before any of this machinery can be reached from real markup. Everything from Module 6 onward has been tested by force-setting a starting state precisely because that producer doesn't exist yet.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Phase 3 is complete. Module 9 leaves the script-data minefield behind
+and returns to Phase 4: Tags &amp; Attributes, starting with the states
+that actually produce a <code>StartTagToken</code> or
+<code>EndTagToken</code> from real <code>&lt;div&gt;</code>-shaped
+markup — the exact producer every state since Module 5 has been waiting
+on.</p>
+
+<div class="module-nav">
+  <a href="../07-script-escaped/tutorial.html">← Module 7: Script Data Escaped States</a>
+  <a href="../09-tag-open/tutorial.html">Module 9: Tag Open / End Tag Open / Tag Name →</a>
+</div>
+
+</main>
+</body>
+</html>
