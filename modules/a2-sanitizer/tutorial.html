@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module A2: HTML Sanitizer on the Real Tokenizer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #f472b6; }
+  .verdict { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+  .verdict .card { flex: 1; min-width: 220px; border-radius: 10px; padding: 1rem 1.2rem; border: 1px solid var(--border); }
+  .verdict .card.match { border-top: 4px solid var(--good); }
+  .verdict .card.diverge { border-top: 4px solid var(--warn); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 9: Applied Security · Track 2, Module A2 of 3</span>HTML Sanitizer on the Real Tokenizer</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../a1-tree-construction/tutorial.html">Module A1: Minimal Tree Construction</a>
+  <a class="tag-link" href="../10-attributes/tutorial.html">Module 10: Attribute Name &amp; Value States</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">This module is Module A1's tree builder put to work: removing dangerous elements and attributes from a real, parsed structure instead of pattern-matching raw text.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The metal detector vs. the airport X-ray</div>
+<p>A metal detector (the regex-based sanitizer) reacts to a <em>signal
+shape</em>: it beeps at anything with the right metallic profile,
+wherever it appears on your body. It has no idea whether that shape is a
+belt buckle in your bag's decorative pattern or a real weapon in your
+pocket — it just pattern-matches. An X-ray scanner (this module's real
+sanitizer) instead builds an actual picture of what's inside the bag —
+what's really a solid object, where its boundaries really are — before
+deciding what's dangerous. This module's whole lesson is that "does this
+text merely <em>look like</em> a script tag" and "is this actually a
+script element, structurally" are different questions, and only one of
+them is safe to base a security decision on.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>Parse the input HTML with the real tokenizer and Module A1's tree
+  builder — never touch the raw source text again after this step.</li>
+  <li>Walk the resulting tree. For every element, check its tag name
+  against a small "dropped elements" list (starting with
+  <code>script</code>); if it matches, the entire element — tags and all
+  its content — is discarded, not kept as unwrapped text.</li>
+  <li>For every element that survives, check each of its already-parsed
+  attributes: drop any whose name starts with <code>on</code> (event
+  handlers), and drop <code>href</code>/<code>src</code> specifically
+  when their value starts with <code>javascript:</code>.</li>
+  <li>Serialize whatever tree survives back into an HTML string,
+  re-escaping <code>&amp;</code> and <code>&lt;</code> in text content so
+  the output is safe to embed again.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">The exact divergence this module measured, both real, both run:</p>
+<div class="verdict">
+  <div class="card match">
+    <strong>Ordinary case</strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim);"><code>&lt;p&gt;hi&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;p&gt;bye&lt;/p&gt;</code></span><br><br>
+    Real tokenizer-based sanitizer and naive regex sanitizer: <strong>identical output.</strong>
+  </div>
+  <div class="card diverge">
+    <strong>RCDATA case</strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim,)"><code>&lt;title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/title&gt;</code></span><br><br>
+    Real sanitizer: title text preserved intact.<br>
+    Naive regex: title text <strong>silently deleted</strong> — a false positive with no real attack behind it.
+  </div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function SANITIZE(html):
+    tree = TREE_BUILDER(html).run()          // Module A1's real tokenizer-driven parse
+    return SERIALIZE( SANITIZE_NODE(tree.children) )
+
+function SANITIZE_NODE(node):
+    if node is ElementNode:
+        if node.tagName in DROPPED_ELEMENTS:
+            return null                       // whole subtree gone, not unwrapped
+        clean = ElementNode(node.tagName, FILTER_ATTRIBUTES(node.attributes))
+        for child in node.children:
+            cleanChild = SANITIZE_NODE(child)
+            if cleanChild != null:
+                clean.children.append(cleanChild)
+        return clean
+    if node is TextNode or CommentNode:
+        return copy of node                   // passed through unchanged
+
+function FILTER_ATTRIBUTES(attributes):
+    return [a for a in attributes if not DANGEROUS(a)]
+
+function DANGEROUS(attr):
+    if attr.name starts with "on": return true
+    if attr.name in {"href","src"} and attr.value starts with "javascript:":
+        return true
+    return false
+
+function SERIALIZE(node):
+    if node is TextNode: return ESCAPE(node.data)     // re-escape & and < !
+    if node is ElementNode: return "&lt;tag attrs&gt;" + serialize(children) + "&lt;/tag&gt;"
+    ...</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>A production-grade allowlist — this module's dangerous-element/attribute lists are small and illustrative (see DECISIONS.md), not a complete real-world policy (no <code>style</code>, no <code>iframe</code>, no <code>data:</code> URLs, no foreign content)</li>
+      <li>Handle CSS- or SVG-context injection — those are different attack surfaces this module doesn't touch</li>
+      <li>Mutation XSS, where a sanitizer's own safe-looking output becomes unsafe after a browser re-parses and "fixes up" malformed structure — that's Module A3</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Remove real <code>&lt;script&gt;</code> elements completely, with zero content leakage, verified by direct string checks</li>
+      <li>Strip dangerous attributes while preserving every safe attribute on the same element</li>
+      <li>Prove — not just claim — the exact regex-vs-tokenizer divergence ROADMAP.md predicted for this module, in both languages independently</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/a2-sanitizer/js
+node --test</code></pre>
+<pre><code># tests 8
+# pass 8
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/a2-sanitizer/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>  PASS - the real, tokenizer-based sanitizer preserves literal "&lt;script&gt;" text inside RCDATA
+  PASS - PROVEN: the naive regex sanitizer corrupts that exact same legitimate content
+  ... (9 more)
+11 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my sanitized output still contains 'alert'"</strong> — check
+that <code>DROPPED_ELEMENTS</code> actually contains the lowercase tag
+name your input uses; tag names are lowercased by the tokenizer itself
+(Module 9), but a typo in this module's own set literal won't be caught
+by that.<br>
+<strong>"my serialized output looks like double-escaped HTML"</strong> —
+make sure <code>escapeText</code>/<code>escapeAttrValue</code> are only
+called once, at serialization time, on already-decoded values — calling
+them earlier (e.g. inside <code>sanitizeNode</code>) and then again in
+<code>serializeNode</code> would escape twice.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> the naive regex
+sanitizer's bug in this module is a <em>false positive</em> — it deletes
+real page content, but no actual attack survives it either (both
+approaches agree in every case where a real `&lt;script&gt;` element is
+truly present). Given that, is the naive regex sanitizer still
+meaningfully "unsafe" to ship, or is this module's finding really just a
+correctness/availability bug rather than a security one?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>It's genuinely both, and the security framing matters even though
+this specific verified case is a false positive. A sanitizer whose
+matching logic doesn't track the tokenizer's real modes has no principled
+reason to only fail in the "safe" direction — the same root cause
+(pattern-matching text instead of tracking RCDATA/RAWTEXT/script-data
+boundaries) is exactly the category of bug that, with a differently
+constructed input, produces the opposite, dangerous kind of failure: a
+real `&lt;script&gt;` that the regex fails to recognize as one (a false
+negative) because it's positioned somewhere the regex's assumptions don't
+hold — inside a RAWTEXT element with an unusual nesting, or split across
+what looks like two tags to a regex but is one tag to a real tokenizer.
+This module chose to build and verify the false-positive case because
+it's clean and easy to confirm unambiguously; the underlying defect is
+the same one a false-negative would come from.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Why does this module's real bug-hunting story (documented in Module A1's DECISIONS.md) matter for a sanitizer specifically, more than for, say, a syntax highlighter?</div>
+    <div class="a">A: Because a sanitizer's entire job is drawing a correctness boundary a security decision depends on. A syntax highlighter that mishandles a mismatched end tag inside RCDATA produces an ugly but harmless rendering glitch. This module's sanitizer making the identical mistake would mean either legitimate content gets destroyed (this module's verified case) or, in a differently shaped input, a dangerous element could be misclassified as safe. The same underlying tokenizer correctness matters everywhere, but the stakes of getting it wrong are not the same in every application built on top of it.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Couldn't you just improve the regex instead of building a whole tokenizer-based sanitizer?</div>
+    <div class="a">A: You could patch this exact case, and the next one, and the one after that — real-world regex-based sanitizers have a long, documented history of doing exactly this, one CVE at a time. The structural problem doesn't go away: a regex has no notion of "which mode is the tokenizer in right now," so it's always one clever input away from being wrong again. A real tokenizer tracks that mode as a first-class fact, which is why this module's sanitizer doesn't need a special case for the `&lt;title&gt;&lt;script&gt;` scenario at all — RCDATA-awareness is just Module 5's tokenizer doing what it already does.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is dropping a `&lt;script&gt;` element's content, rather than keeping it as unwrapped text, always the right choice?</div>
+    <div class="a">A: Not universally — it's a deliberate, conservative policy choice for this module (see DECISIONS.md), not a fact forced by the tokenizer. `&lt;script&gt;alert(1)&lt;/script&gt;` unwrapped to bare text `alert(1)` would still be inert as plain page text. But a general sanitizer can't assume that's true for every disallowed element in every context (some elements' content is meaningful even after their tags are stripped, depending on where the sanitized output ends up), so removing the whole subtree is the safer default this module chose.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>Module A3 studies real, named vulnerability classes — parser
+differentials and mutation XSS — that trace directly to specific
+tokenizer states this course has already built, closing the loop from
+"spec text" all the way to "documented real-world security bugs."</p>
+
+<div class="module-nav">
+  <a href="../a1-tree-construction/tutorial.html">← Module A1: Minimal Tree Construction</a>
+  <a href="../a3-security/tutorial.html">Module A3: Parser Differentials &amp; Mutation XSS →</a>
+</div>
+
+</main>
+</body>
+</html>
