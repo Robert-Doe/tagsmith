@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module A3: Parser Differentials &amp; Mutation XSS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #fb923c; }
+  .verdict { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+  .verdict .card { flex: 1; min-width: 220px; border-radius: 10px; padding: 1rem 1.2rem; border: 1px solid var(--border); }
+  .verdict .card.match { border-top: 4px solid var(--good); }
+  .verdict .card.diverge { border-top: 4px solid var(--warn); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 9: Applied Security · Track 2, Module A3 of 3 (Course Capstone)</span>Parser Differentials &amp; Mutation XSS</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../a1-tree-construction/tutorial.html">Module A1: Minimal Tree Construction</a>
+  <a class="tag-link" href="../05-rcdata-rawtext/tutorial.html">Module 5: RCDATA/RAWTEXT/PLAINTEXT Families</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">This module reuses Module A1's tag-name-to-state table for a second, distinct real spec purpose: not switching state mid-stream, but choosing the tokenizer's starting state before parsing even begins.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The interpreter who forgot which room they're in</div>
+<p>Imagine an interpreter fluent in two completely different conventions:
+in the courtroom, every word gets logged as sworn testimony; in the
+green room backstage, every word is just casual chat, off the record.
+The interpreter doesn't decide which convention applies by reading the
+words themselves — they're told, before anyone speaks, which room they're
+standing in. Now imagine someone scribbles down a sentence spoken
+backstage (off the record, harmless) and later hands that same
+transcript to a court stenographer, who — knowing nothing about where it
+came from — logs it as sworn testimony instead. Nothing was forged. The
+words never changed. Only the room did. This module is about exactly
+that failure mode, applied to HTML: the same text, genuinely inert in
+one parsing context, becomes live and dangerous the instant it's handed
+to a parser standing in a different room.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>A context tag name (e.g. <code>textarea</code>, <code>div</code>,
+  <code>script</code>) is chosen <em>before</em> a single character of
+  the fragment is parsed — mirroring exactly what
+  <code>element.innerHTML = string</code> does in a real browser, which
+  always knows its own target element in advance.</li>
+  <li>The tokenizer's starting <code>state</code> (and
+  <code>lastStartTagName</code>) is set directly from that context,
+  using the very same tag-name table Module A1 built for a different
+  purpose (mid-stream switching).</li>
+  <li>The fragment is parsed completely normally from that starting
+  point — nothing about the tokenizer's per-character logic changes at
+  all.</li>
+  <li>The same exact string is parsed twice, with two different context
+  tag names, and the two resulting trees are compared directly.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">Verified against a real, live browser DOM in this session — not simulated:</p>
+<div class="verdict">
+  <div class="card match">
+    <strong><code>textarea.innerHTML = payload</code></strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim);">payload = <code>&lt;img src=x onerror=alert(1)&gt;</code></span><br><br>
+    <code>textarea.value</code> === the payload, verbatim. Completely inert.
+  </div>
+  <div class="card diverge">
+    <strong><code>div.innerHTML = capturedText</code></strong><br>
+    <span style="font-size:0.85rem;color:var(--text-dim);">capturedText === the exact string read back out above</span><br><br>
+    A real, live <code>&lt;img&gt;</code> element, with a real <code>onerror</code> handler. <strong>Same string. Different room.</strong>
+  </div>
+</div>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function PARSE_FRAGMENT(html, contextTagName):
+    tokenizer = new Tokenizer(html)
+    if contextTagName is not none:
+        tokenizer.state            = CONTEXT_INITIAL_STATE(contextTagName)
+        tokenizer.lastStartTagName = contextTagName
+    // from here on: identical to a normal top-level parse
+    return TREE_BUILD(tokenizer)
+
+function CONTEXT_INITIAL_STATE(tagName):
+    // the SAME table Module A1 uses for mid-stream switching --
+    // applied here BEFORE parsing starts, instead of in reaction
+    // to a start tag token appearing mid-stream
+    if tagName in RCDATA_ELEMENTS:  return RCDATA
+    if tagName in RAWTEXT_ELEMENTS: return RAWTEXT
+    if tagName == "script":         return SCRIPT_DATA
+    if tagName == "plaintext":      return PLAINTEXT
+    return DATA
+
+// The mutation-XSS mechanism itself:
+safelyStored = PARSE_FRAGMENT(payload, "textarea")   // RCDATA -> inert text
+capturedText = safelyStored.children[0].text          // identical to payload
+reinserted   = PARSE_FRAGMENT(capturedText, "div")    // DATA -> LIVE element
+// reinserted now contains a real, dangerous element -- built from text
+// that was, one step earlier, provably inert</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Fix this mechanism — it isn't a bug to patch. Context-sensitive tokenizing is a real, intentional spec feature; the risk lives in application code that moves text between contexts without re-sanitizing for the destination, not in the tokenizer</li>
+      <li>Model the full real fragment-parsing algorithm (synthetic <code>html</code>/<code>head</code>/<code>body</code> wrapper elements, foreign-content namespace switching) — this module's simplified version is enough to prove the mechanism, not spec-complete</li>
+      <li>Cover other named real-world mXSS variants that depend on machinery this course deliberately left out of scope (foreign content, the "scripting flag" affecting <code>&lt;noscript&gt;</code>)</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Prove, with a real parsed attribute list, that identical text is inert in one context and a live element with a live event handler in another</li>
+      <li>Prove the underlying mechanism against a real, live browser DOM — not just this course's own implementation</li>
+      <li>Explain, precisely, why "the text was safe when I first checked it" is not the same claim as "the text is safe wherever I put it next"</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/a3-security/js
+node --test</code></pre>
+<pre><code># tests 5
+# pass 5
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/a3-security/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>  PASS - context=div (DATA) parses the identical string as a REAL, live element
+  PASS - captured text is bit-for-bit identical to the original payload
+  PASS - PROVEN: the SAME captured text becomes a real element with a real event handler in a new context
+  ... (6 more)
+9 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my context='div' test still produces literal text, not a real element"</strong> —
+double check you're passing the context tag name as the SECOND
+constructor argument, not accidentally parsing it as part of the HTML
+string itself; and confirm `contextInitialState('div')` actually falls
+through all four checks to the `DATA` default (it isn't in any of the
+three special sets, and isn't `"script"`/`"plaintext"`).<br>
+<strong>"my captured text doesn't match the original payload exactly"</strong> —
+this specific payload contains no `&`/`<`-requiring-decode sequences, so
+RCDATA's entity-decoding (Module 4) never has anything to do here; if you
+change the payload to include a real entity like `&amp;`, expect
+`capturedText` to differ from the raw source text — decoded, not
+verbatim — which is itself worth predicting before you test it.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> Module A2 built a real,
+correct, tokenizer-based sanitizer. Suppose an application runs
+`div.innerHTML = Sanitizer.sanitize(userInput)` (safe, by Module A2's own
+proof), reads the sanitized text back out with `div.textContent`, and
+later does `anotherDiv.innerHTML = thatCapturedText` somewhere else in
+the same page, with no further processing. Does Module A2's sanitizer
+guarantee `anotherDiv` is safe too?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>No — and this is precisely the composition failure this module exists
+to name. Module A2's `sanitize()` guarantees its OWN output is safe HTML
+when parsed in an ordinary DATA-state document context, which is exactly
+what `div.innerHTML = sanitize(...)` gives you. But `div.textContent`
+reads back the ELEMENT TREE's decoded text — not the sanitized markup
+string — and reassigning that decoded text into a second element's
+`innerHTML` is a brand-new parse, in a context Module A2 never analyzed
+and never promised anything about. If `sanitize()`'s output happened to
+contain literal `<`/`>`-looking sequences that survived as safe TEXT the
+first time (say, inside a `<title>`, exactly like Module A2's own proof
+case), reading that text back out and reinserting it verbatim can
+resurrect exactly the mechanism this module demonstrates. Module A2 and
+Module A3 are not in tension — A2 proves its own boundary correctly; A3
+proves that boundary doesn't automatically extend to a second, different
+parse the sanitizer never saw.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: If nothing in this module is a "bug," why build a whole module around it?</div>
+    <div class="a">A: Because a huge share of real, historically documented mutation-XSS vulnerabilities are exactly this: no single component was wrong, but composing two individually-correct behaviors (a sanitizer's context, a later re-insertion's different context) produced an unsafe result nobody explicitly decided to allow. Understanding tokenizer states well enough to see this coming — rather than discovering it as a live incident — is the entire point of a comprehensive-exam-level understanding of this material, which is what this whole course has been building toward since Module 1.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Why did this module verify against a real, live browser instead of just trusting the course's own tokenizer?</div>
+    <div class="a">A: Same reasoning as Module 16's differential tests: this course's own implementation and its own tests share whatever understanding (or misunderstanding) of the spec went into writing them. A real browser's actual `innerHTML` behavior is independent evidence — and for a module whose entire claim is about a real, named security bug class, "independently verified against the thing users are actually exposed to" matters even more than it did for Module 16's plain correctness claims.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Now that Track 2 is complete, what's the actual takeaway for a comprehensive exam?</div>
+    <div class="a">A: That HTML tokenization is not merely a parsing-theory exercise — every state this course built (RCDATA's tag-blindness, script-data's escape mechanisms, attribute value quoting, appropriate-end-tag matching) is directly load-bearing for real, named security properties of the web platform. Track 1 proved the machine is correct in isolation; Track 2 proved, with a real tree builder, a real sanitizer, and a real browser cross-check, exactly how and where that correctness does — and does not — automatically propagate to the applications built on top of it.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>This is the last module in the course. Track 1 built a complete,
+spec-faithful HTML5 tokenizer from nothing, in two languages, state by
+state. Track 2 put it to work: a real tree, a real sanitizer, and a real,
+live-browser-verified security mechanism — closing the loop from the raw
+spec text at
+<a href="https://dev.w3.org/html5/spec-LC/tokenization.html#data-state">dev.w3.org's tokenization section</a>
+all the way to the kind of question a comprehensive exam actually asks.
+Everything you built along the way — 68 states, two languages, every
+module's <code>DECISIONS.md</code>, and <code>GLOSSARY.md</code> — is
+still sitting in this repository, ready to defend.</p>
+
+<div class="module-nav">
+  <a href="../a2-sanitizer/tutorial.html">← Module A2: HTML Sanitizer on the Real Tokenizer</a>
+  <span class="disabled">Course complete</span>
+</div>
+
+</main>
+</body>
+</html>
