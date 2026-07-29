@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module A1: Minimal Tree Construction</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css">
+<style>
+  :root { --accent: #34d399; }
+  .verdict { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+  .verdict .card { flex: 1; min-width: 220px; border-radius: 10px; padding: 1rem 1.2rem; border: 1px solid var(--border); }
+  .verdict .card.match { border-top: 4px solid var(--good); }
+  .seam-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  .seam-table th, .seam-table td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+  .seam-table th { background: rgba(255,255,255,0.04); }
+</style>
+</head>
+<body>
+<main class="page">
+
+<h1><span class="kicker">Phase 8: The Consumer Side · Track 2, Module A1 of 3</span>Minimal Tree Construction</h1>
+
+<h2 style="margin-top:1rem;">00 — Prerequisites</h2>
+<div class="tag-links">
+  <a class="tag-link" href="../09-tag-open/tutorial.html">Module 9: Tag Open / End Tag Open / Tag Name</a>
+  <a class="tag-link" href="../16-integration/tutorial.html">Module 16: Full Integration &amp; Differential Testing</a>
+</div>
+<p style="font-size:0.9rem;color:var(--text-dim);">Module 9 is where this course first proved the tokenizer alone cannot decide to enter RCDATA/RAWTEXT/script-data. Module 16 is where that limitation stopped being theoretical: a real browser was shown diverging from this course's pure tokenizer on exactly the case this module now fixes.</p>
+
+<h2>01 — The Big Analogy</h2>
+<div class="analogy-box">
+<div class="label">The stenographer and the editor</div>
+<p>Picture a courtroom stenographer (the tokenizer): she reads the
+proceedings one word at a time and shouts out each recognized unit the
+instant she's sure of it — "objection!", "sustained!", "witness name:
+Ms. Chen" — with zero awareness of the trial's overall structure. Now
+picture an editor (the tree constructor) sitting beside her, building the
+official transcript's outline from what she shouts. Most of the time the
+editor just listens and files things away. But every so often, the judge
+says something like "the witness will now read the contract aloud,
+verbatim" — and at that exact moment, the editor leans over and whispers
+to the stenographer: <em>"for the next section, don't interpret anything
+as a courtroom command — even if it sounds like 'objection,' write it
+down as literal words, until you hear me say 'stop.'"</em> That whisper is
+the entire missing piece from every earlier module in this course: this
+tokenizer could always shout tokens, but it never had an editor sitting
+next to it who could whisper instructions back. Module A1 builds that
+editor.</p>
+</div>
+
+<h2>02 — What Happens, Step by Step</h2>
+<ol class="steps">
+  <li>A <code>TreeBuilder</code> owns a <code>Tokenizer</code> and asks it
+  for exactly one step at a time — never the whole token stream at
+  once — specifically so it can react before the tokenizer moves on.</li>
+  <li>Every newly emitted token gets routed by type: a DOCTYPE token sets
+  the document's doctype fields; a comment token becomes a
+  <code>CommentNode</code>; a character token gets appended onto (or
+  starts) a <code>TextNode</code>; a start tag becomes an
+  <code>ElementNode</code>, attached to whatever element is currently
+  "open"; an end tag closes the matching open element.</li>
+  <li>The moment a start tag becomes an <code>ElementNode</code>, its tag
+  name is checked against a small table. If it's one of a handful of
+  special names (<code>textarea</code>, <code>title</code>,
+  <code>style</code>, <code>script</code>, ...), the tree builder reaches
+  directly into the tokenizer object and changes its <code>state</code>
+  field, right then — before the tokenizer has consumed a single
+  character of that element's content.</li>
+  <li>Because the state change happens <em>before</em> the next character
+  is read, the tokenizer now correctly treats everything up to the
+  matching end tag as literal text (or script text), instead of trying
+  to recognize tags inside it.</li>
+</ol>
+
+<h2>03 — A Concrete Map of This Module's State</h2>
+<div class="diagram-box">
+<p style="margin-top:0;font-size:0.85rem;color:var(--text-dim);">The entire feedback table this module adds — small on purpose, see §05:</p>
+<table class="seam-table">
+<tr><th>Start tag name</th><th>Tokenizer state it switches to</th><th>Why</th></tr>
+<tr><td><code>textarea</code>, <code>title</code></td><td><code>RCDATA</code></td><td>Entities still decode, but tags inside are literal text</td></tr>
+<tr><td><code>style</code>, <code>xmp</code></td><td><code>RAWTEXT</code></td><td>Nothing decodes; tags inside are literal text</td></tr>
+<tr><td><code>script</code></td><td><code>SCRIPT_DATA</code></td><td>The whole Module 6–8 escaping minefield only ever fires once this switch happens</td></tr>
+<tr><td><code>plaintext</code></td><td><code>PLAINTEXT</code></td><td>Everything for the rest of the document, no exit — see Module 5</td></tr>
+</table>
+<p style="font-size:0.85rem;color:var(--text-dim);">Every other tag name: no state change at all. The tokenizer just keeps tokenizing in <code>DATA</code>, exactly as it always has.</p>
+</div>
+
+<h2>04 — The Algorithm, Explained (pseudocode)</h2>
+<pre><code>function BUILD_TREE(html):
+    tokenizer = new Tokenizer(html)
+    document  = new DocumentNode()
+    stack     = [document]        // "currently open" elements, root at index 0
+
+    while not tokenizer.halted:
+        countBefore = length(tokenizer.tokensSoFar)
+        tokenizer.step()                      // produce AT MOST the next token
+        for each newToken since countBefore:
+            PROCESS(newToken, stack, document)
+
+    return document
+
+function PROCESS(token, stack, document):
+    top = stack[last]
+    match token.type:
+        DOCTYPE:    document.doctype = fields_of(token)
+        COMMENT:    append CommentNode(token.data) to top.children
+        CHARACTER:  if top.children[last] is a TextNode:
+                        top.children[last].data += token.data
+                    else:
+                        append new TextNode(token.data) to top.children
+        START_TAG:
+            element = new ElementNode(token.tagName, token.attributes)
+            append element to top.children
+            if token.selfClosing or token.tagName in VOID_ELEMENTS:
+                return                          // never opened -- no children ever
+            push element onto stack
+            if token.tagName in TAG_TO_STATE_TABLE:            // <-- THE seam
+                tokenizer.state             = TAG_TO_STATE_TABLE[token.tagName]
+                tokenizer.lastStartTagName  = token.tagName
+        END_TAG:
+            walk stack top-down looking for an ElementNode with
+              matching tagName; if found, pop the stack down to
+              (and including) it; if not found, do nothing</code></pre>
+
+<h2>05 — Limits / What You Cannot Do Yet</h2>
+<div class="compare-grid">
+  <div class="compare-col cant">
+    <h4>Can't do yet</h4>
+    <ul>
+      <li>Handle genuinely misnested tags correctly (<code>&lt;b&gt;&lt;i&gt;x&lt;/b&gt;&lt;/i&gt;</code>) — the real spec's "adoption agency algorithm" reparents nodes; this module's stack-walk just closes down to the first match, silently dropping the rest</li>
+      <li>The real HTML5 "insertion modes" (before html, in head, in body, in table, ...) — this module has exactly one generic stack, no mode-specific rules</li>
+      <li>The complete RCDATA/RAWTEXT/void-element vocabulary — this module's table is a representative subset, not the full spec list (see DECISIONS.md)</li>
+      <li>Foreign content (SVG/MathML) context switching — a related but separate seam, out of scope here</li>
+    </ul>
+  </div>
+  <div class="compare-col can">
+    <h4>Can do</h4>
+    <ul>
+      <li>Drive the real tokenizer one step at a time and intervene between steps — the exact producer/consumer coupling the spec itself describes</li>
+      <li>Correctly resolve <em>both</em> documented divergences from Module 16's real-browser differential test</li>
+      <li>Build a correct, real nested tree for ordinary, well-formed documents — doctype, elements, attributes, text, comments, void elements, self-closing tags</li>
+    </ul>
+  </div>
+</div>
+
+<h2>06 — Run It</h2>
+<h3>JavaScript</h3>
+<pre><code>cd modules/a1-tree-construction/js
+node --test</code></pre>
+<pre><code># tests 11
+# pass 11
+# fail 0</code></pre>
+
+<h3>Java</h3>
+<pre><code>cd modules/a1-tree-construction/java
+javac *.java
+java TokenizerTest</code></pre>
+<pre><code>  PASS - textarea content is 'x&amp;&lt;b&gt;y' (tags literal, entities decoded)
+  PASS - script content matches the real browser exactly (Module 16)
+  PASS - a real &lt;/script&gt; end tag now correctly closes the element (2 children)
+  PASS - MISMATCHED end tag inside RCDATA stays literal text
+  PASS - MISMATCHED end tag inside RAWTEXT stays literal text
+  ... (38 more)
+43 passed, 0 failed</code></pre>
+
+<div class="callout trouble">
+<div class="label">Getting a blank or broken result?</div>
+<p><strong>"my textarea/script content still gets split into multiple
+elements"</strong> — check that the state-switch happens inside
+<code>insertStartTag</code>, immediately after the element is pushed onto
+the stack, and specifically <em>before</em> control returns to the
+step-loop. If it's applied one iteration too late (e.g. after the loop
+that processes a batch of tokens, rather than the instant the start tag
+is seen), the tokenizer will already have consumed at least one more
+character in the wrong state.<br>
+<strong>"my Java build won't compile, complaining about
+<code>halted</code>"</strong> — that field is intentionally private;
+this module calls the new public <code>isHalted()</code> accessor
+instead of touching the field directly. See CODE_WALKTHROUGH.md.</p>
+</div>
+
+<h2>07 — Brain Exercise</h2>
+<div class="brain">
+<p><strong>Before reading the answer:</strong> suppose, instead of
+stepping the tokenizer one call at a time, you called
+<code>tokenizer.run()</code> once to get the <em>complete</em> token
+list, and only then walked that finished list, applying the exact same
+<code>PROCESS</code> logic (including the state-switch line) to each
+token in order. For the input
+<code>&lt;textarea&gt;x&amp;amp;&lt;b&gt;y&lt;/textarea&gt;</code>, would
+the resulting tree still come out correct?</p>
+<details class="reveal">
+<summary>Reveal the answer</summary>
+<p>No — and the reason is subtle enough to be worth sitting with. The
+bug isn't in <code>PROCESS</code>'s logic at all; it's that
+<code>run()</code> already finished tokenizing the <em>entire</em> input
+before your code gets to look at a single token. By the time
+<code>run()</code> returns, the tokenizer was still in plain
+<code>DATA</code> state when it reached <code>&lt;b&gt;</code> — nobody
+had told it otherwise yet — so it already produced a real
+<code>StartTagToken("b")</code> instead of the literal characters
+<code>&lt;</code>, <code>b</code>, <code>&gt;</code>. That token is now
+a fact in the list; no amount of clever post-processing of an already-
+finished, already-wrong token list can turn a <code>StartTagToken</code>
+back into the three characters it should have been. This is exactly why
+this module's <code>run()</code> method calls <code>tokenizer.step()</code>
+in a loop instead of calling the tokenizer's own, more convenient
+<code>run()</code> — the timing of the intervention, not just its
+existence, is what makes it work.</p>
+</details>
+</div>
+
+<h2>08 — There Are No Dumb Questions</h2>
+<div class="qa">
+  <div class="qa-item">
+    <div class="q">Q: Did this module's tests actually pass on the first try, or is that just how it's being presented?</div>
+    <div class="a">A: Not quite — and the real story is worth knowing. While preparing inputs for Module A2, <code>&lt;title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/title&gt;</code> produced a genuinely broken tree: the tokenizer was closing <code>&lt;title&gt;</code> early, at the mismatched <code>&lt;/script&gt;</code>, instead of treating it as literal text the way Module 5's "appropriate end tag" rule requires. Direct instrumentation traced it to a real bug that had existed in this course's shared <code>Tokenizer.js</code> since somewhere in Modules 5–9: two methods with the same name, <code>endTagOpenState</code>, where JavaScript's last-definition-wins class semantics silently let one shadow the other. No Track 1 test could ever have caught it, because Track 1 never drives a real, tag-triggered RCDATA/RAWTEXT/script-data entry followed by a genuinely mismatched closing tag — only this module's real tag-driven seam can. Full story, root cause, and the fix (plus why Java never had this bug at all) are in this module's <code>DECISIONS.md</code>.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: If the tokenizer already emitted the wrong token by the time the tree builder sees it, how can switching state "later" ever fix anything?</div>
+    <div class="a">A: It doesn't fix a token that's already wrong — it prevents the next token from ever being wrong in the first place, by switching state before the tokenizer consumes the very next character. Token production is strictly one-directional (tokenizer → tree builder), but the tree builder is allowed to influence the tokenizer's <em>future</em> behavior — just never its past output. Sequence is everything here, which is exactly what the Brain Exercise above demonstrates concretely.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: This module already resolves both real divergences Module 16 found against a live browser — why still call it "minimal"?</div>
+    <div class="a">A: Because the real fix needed here turned out to be small, but the real spec around it is not. HTML5's actual tree construction algorithm has roughly twenty named "insertion modes," each with dozens of tag-specific rules, plus a separate "adoption agency algorithm" just for misnested formatting elements. This module implements one generic open-elements stack and one small feedback table — enough to prove and resolve the exact seam this course has been pointing at since Module 9, not a production-grade tree builder.</div>
+  </div>
+  <div class="qa-item">
+    <div class="q">Q: Is reaching directly into another object's field (`tokenizer.state = ...`) from outside its class bad design?</div>
+    <div class="a">A: In most contexts, yes — it's usually a sign two things should talk through a method, not a shared field. Here it's deliberate and spec-faithful: the HTML5 spec itself describes tokenization and tree construction as two coupled algorithms that run concurrently and reach into each other, not two independent black boxes connected by a clean one-way interface. Modeling that coupling as a direct, visible field write is more honest about what's actually happening than hiding it behind a method that would just do the same assignment one layer removed.</div>
+  </div>
+</div>
+
+<h2>09 — What's Next</h2>
+<p>With a real tree builder in place, Module A2 puts it to applied use:
+a sanitizer that strips dangerous content (starting with
+<code>&lt;script&gt;</code>) while correctly preserving surrounding
+text — something a hand-rolled regex-based sanitizer provably cannot do
+safely, precisely because it doesn't know where RAWTEXT/script-data
+boundaries are the way this course's real tokenizer does.</p>
+
+<div class="module-nav">
+  <a href="../16-integration/tutorial.html">← Module 16: Full Integration &amp; Differential Testing</a>
+  <a href="../a2-sanitizer/tutorial.html">Module A2: HTML Sanitizer on the Real Tokenizer →</a>
+</div>
+
+</main>
+</body>
+</html>
