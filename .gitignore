@@ -12,6 +12,9 @@ build/
 node_modules/
 npm-debug.log*
 
+# webapp/ (Vite + TS demo) build output
+webapp/dist/
+
 # OS cruft
 .DS_Store
 Thumbs.db
