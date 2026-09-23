@@ -111,8 +111,8 @@ function renderTokenDetail(t: Token): string {
 }
 
 /** Coalesce runs of consecutive CharacterTokens into a single display row
- * (the spec really does emit one token per character — that granularity is
- * preserved in `tokens`/`tokenStates` for accuracy — but a thousand
+ * (the spec really does emit one token per character, that granularity is
+ * preserved in `tokens`/`tokenStates` for accuracy, but a thousand
  * one-row-per-letter rows would make the stream unreadable). */
 interface DisplayRow {
   tokens: Token[];

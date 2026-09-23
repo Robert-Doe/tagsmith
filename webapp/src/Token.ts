@@ -1,5 +1,5 @@
 /*
- * Token.ts — TypeScript port of tagsmith's modules/16-integration/js/Token.js.
+ * Token.ts, TypeScript port of tagsmith's modules/16-integration/js/Token.js.
  *
  * The six token types the spec defines in the 8.2.4 preamble. Field names
  * and initial values are unchanged from the original JS classes.

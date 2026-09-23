@@ -1,5 +1,5 @@
 /*
- * CharacterReference.ts — TypeScript port of tagsmith's
+ * CharacterReference.ts, TypeScript port of tagsmith's
  * modules/16-integration/js/CharacterReference.js.
  *
  * Spec section 8.2.4.69, "Tokenizing character references" -- the shared

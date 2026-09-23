@@ -1,8 +1,8 @@
 /*
- * Tokenizer.ts — TypeScript port of tagsmith's real, spec-accurate
+ * Tokenizer.ts, TypeScript port of tagsmith's real, spec-accurate
  * HTML5 tokenizer state machine.
  *
- * Ported directly from modules/16-integration/js/Tokenizer.js — the
+ * Ported directly from modules/16-integration/js/Tokenizer.js, the
  * course's own final, fully-implemented (all 68 states) JavaScript
  * tokenizer. Every state method below is a direct transliteration: same
  * branches, same order, same parse-error names, same reconsume-via-
@@ -51,7 +51,7 @@ export class Tokenizer {
   pos = 0;
   state: StateName = State.DATA;
   tokens: Token[] = [];
-  /** Parallel to `tokens` — the state active when each token was emitted. */
+  /** Parallel to `tokens`, the state active when each token was emitted. */
   tokenStates: StateName[] = [];
   /** Capped log of every state transition, for the "state trace" panel. */
   stateTrace: { state: StateName; pos: number }[] = [];

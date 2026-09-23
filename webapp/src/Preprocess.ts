@@ -1,5 +1,5 @@
 /*
- * Preprocess.ts — TypeScript port of
+ * Preprocess.ts, TypeScript port of
  * tagsmith's modules/16-integration/js/Preprocess.js.
  *
  * "Preprocessing the input stream": every CRLF pair becomes one LF, and

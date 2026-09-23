@@ -1,8 +1,8 @@
 /*
- * State.ts — TypeScript port of tagsmith's modules/16-integration/js/State.js.
+ * State.ts, TypeScript port of tagsmith's modules/16-integration/js/State.js.
  *
  * Every named state from the HTML5 tokenization spec section 8.2.4, as
- * plain strings — unchanged from the original. The value of each entry is
+ * plain strings, unchanged from the original. The value of each entry is
  * the exact spec section title (minus "state"), so a state name doubles
  * as a search string for the spec page.
  */
