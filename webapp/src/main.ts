@@ -197,7 +197,7 @@ app.innerHTML = `
 
   <section class="hero">
     <h1>HTML Tokenizer Playground</h1>
-    <p>A real port of tagsmith's spec-accurate HTML5 tokenizer state machine, running client-side. Type raw HTML below and watch the actual token stream &mdash; and the exact WHATWG state name active when each token was emitted.</p>
+    <p>A real port of tagsmith's spec-accurate HTML5 tokenizer state machine, running client-side. Type raw HTML below and watch the actual token stream, and the exact WHATWG state name active when each token was emitted.</p>
   </section>
 
   <main class="main">
